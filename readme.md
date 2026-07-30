@@ -66,3 +66,6 @@ port: 2121          # Custom FTP connection port
 passive: true       # Enable passive FTP mode
 title: "File Manager" # Custom application title
 ```
+## License
+
+This project is licensed under the MIT License.
