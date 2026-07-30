@@ -39,6 +39,10 @@ Open http://localhost:8000, enter your FTP server credentials.
 
 ## Docker
 
+```bash
+docker run -d --restart unless-stopped --name ffm -p 8000:8000 -v ./config:/app/config ghcr.io/serenitatis/ffm:stable
+```
+
 The `config/config.yaml` configuration is mounted as a volume — edits on the host are applied after refreshing the page in the browser.
 
 ### Manual Build
