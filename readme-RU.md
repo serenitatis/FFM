@@ -39,6 +39,10 @@ uvicorn server.main:app --host 0.0.0.0 --port 8000
 
 ## Docker
 
+```bash
+docker run -d --restart unless-stopped --name ffm -p 8000:8000 -v ./config:/app/config ghcr.io/serenitatis/ffm:stable
+```
+
 Конфиг `config/config.yaml` подключается volume'ом — правки на хосте применяются после обновления страницы в браузере.
 
 ### Сборка вручную
