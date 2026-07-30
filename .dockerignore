@@ -4,3 +4,11 @@ __pycache__
 .gitignore
 readme.md
 AGENTS.md
+.github
+readme-RU.md
+Dockerfile
+server.bat
+server.sh
+.DS_Store
+Thumbs.db
+*.log
