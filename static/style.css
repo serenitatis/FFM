@@ -1,0 +1,100 @@
+.hidden{display:none!important}
+.config-hidden{display:none!important}
+
+/* --- auth gradient animation --- */
+.auth-gradient{background:linear-gradient(135deg,#2563EB,#C0CEED,#2563EB,#C0CEED);background-size:400% 400%;animation:gradientShift 15s ease infinite}
+.dark .auth-gradient{background:linear-gradient(135deg,#0E1727,#2C486A,#0E1727,#2C486A);background-size:400% 400%}
+@keyframes gradientShift{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
+
+/* --- selected row --- */
+tr.selected,tr.selected:nth-child(even),tr.selected:hover{background:rgba(37,99,235,.08)}
+.dark tr.selected,.dark tr.selected:nth-child(even),.dark tr.selected:hover{background:rgba(96,165,250,.12)}
+
+/* --- column widths --- */
+th:nth-child(2){width:55%}
+th:nth-child(3){width:20%}
+th:nth-child(4){width:25%}
+
+/* --- select mode checkbox column --- */
+.cb-cell{display:none;text-align:center;vertical-align:middle;overflow:visible;text-overflow:clip}
+table.select-mode .cb-cell{display:table-cell;width:2%}
+@media (pointer:coarse){table.select-mode .cb-cell{width:8%}}
+table.select-mode th:nth-child(2){width:auto}
+table.select-mode th:nth-child(3){width:15%}
+table.select-mode th:nth-child(4){width:20%}
+
+.cb-select{cursor:pointer}
+
+/* --- icon in file listing --- */
+.icon{margin-right:8px;width:16px;text-align:center;display:inline-block;color:#6b7280}
+.icon.fa-folder,.icon.fa-folder-open{color:#2563eb}
+.dark .icon.fa-folder,.dark .icon.fa-folder-open{color:#60a5fa}
+
+/* --- progress bar (JS-injected) --- */
+.op-progress-bar{width:80px;height:4px;background:#e5e7eb;border-radius:2px;overflow:hidden;display:inline-block;vertical-align:middle}
+.dark .op-progress-bar{background:#334155}
+.op-progress-bar-fill{display:block;height:100%;background:#3b82f6;border-radius:2px;transition:width .25s ease}
+
+/* --- spinner (JS-injected) --- */
+@keyframes op-spin{to{transform:rotate(360deg)}}
+.op-spinner{animation:op-spin 1s linear infinite}
+
+/* --- context menu --- */
+.ctx-menu{list-style:none}
+.ctx-menu li{padding:6px 12px;border-radius:5px;cursor:pointer;font-size:13px;white-space:nowrap;color:var(--text,#1a1a2e)}
+.dark .ctx-menu li{color:#e2e8f0}
+.ctx-menu li i{width:18px;text-align:center;margin-right:8px;color:var(--text-secondary,#6b7280)}
+.dark .ctx-menu li i{color:#94a3b8}
+.ctx-menu li:hover{background:var(--surface-hover,#f3f4f6)}
+.dark .ctx-menu li:hover{background:#334155}
+.ctx-menu .sep{height:1px;background:#e5e7eb;margin:4px 8px;padding:0;border-radius:0;cursor:default}
+.dark .ctx-menu .sep{background:#334155}
+.ctx-menu .sep:hover{background:#e5e7eb}
+.dark .ctx-menu .sep:hover{background:#334155}
+
+/* --- sort indicator (JS-updated) --- */
+.sort-indicator{display:inline-block;width:12px;text-align:center;font-size:10px;margin-left:2px;color:#9ca3af}
+.dark .sort-indicator{color:#64748b}
+
+/* --- row-up (parent dir row) --- */
+.row-up td{font-weight:500}
+
+/* --- mobile-only --- */
+.mobile-only{display:none}
+@media (pointer:coarse){
+  .mobile-only{display:inline-flex!important;align-items:center;gap:4px}
+  html{-webkit-touch-callout:none}
+  .auth-actions{flex-direction:row;flex-wrap:wrap}
+  #auth-form button[type="submit"]{flex:0 0 100%;justify-content:center}
+  .auth-actions select{flex:1}
+  #config-group{flex-direction:column}
+}
+
+/* --- tbody row base --- */
+tbody tr{cursor:pointer;user-select:none}
+tbody tr:nth-child(even){background:rgba(0,0,0,.02)}
+.dark tbody tr:nth-child(even){background:rgba(255,255,255,.02)}
+
+/* --- table cells (JS-generated) --- */
+td{padding:8px 16px;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-bottom:1px solid #e5e7eb}
+.dark td{border-bottom-color:#334155}
+tbody tr:hover{background:rgba(0,0,0,.04)}
+.dark tbody tr:hover{background:rgba(255,255,255,.04)}
+tr.selected,tr.selected:nth-child(even),tr.selected:hover{background:rgba(37,99,235,.08)!important}
+.dark tr.selected,.dark tr.selected:nth-child(even),.dark tr.selected:hover{background:rgba(96,165,250,.12)!important}
+
+/* --- drop overlay --- */
+#drop-overlay.hidden{opacity:0;pointer-events:none;display:flex}
+#drop-overlay:not(.hidden){opacity:1}
+#drop-overlay{transition:opacity .15s;border:3px dashed rgba(37,99,235,.4)}
+.dark #drop-overlay{border-color:rgba(96,165,250,.4)}
+
+/* --- properties modal (JS-injected) --- */
+#props-body p{margin:6px 0;line-height:1.5}
+#props-body strong{display:inline-block;min-width:80px;color:#6b7280}
+.dark #props-body strong{color:#94a3b8}
+#props-body i{margin-right:6px;color:#2563eb}
+.dark #props-body i{color:#60a5fa}
+
+.op-bar{transition:opacity .15s,max-height .15s,padding-top .15s,padding-bottom .15s,border-bottom-width .15s;overflow:hidden;max-height:60px;opacity:1;border-bottom-width:1px}
+.op-bar.op-bar-hidden{max-height:0;padding-top:0;padding-bottom:0;opacity:0;border-bottom-width:0}
