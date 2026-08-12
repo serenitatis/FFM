@@ -5,7 +5,7 @@ const errorCodeMap = {
   item_not_found: 'item_not_found',
 };
 
-let cookieLifetimeMin = 43200;
+let cookieLifetimeMin = 180;
 
 function getCookie(name) {
   const m = document.cookie.match(new RegExp('(?:^|; )' + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '=([^;]*)'));

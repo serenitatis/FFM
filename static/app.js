@@ -1253,7 +1253,7 @@ async function loadConfig() {
   try {
     const resp = await fetch('/api/config');
     const cfg = await resp.json();
-    cookieLifetimeMin = cfg.sessionLifetime || 43200;
+    cookieLifetimeMin = cfg.sessionLifetime || 180;
     if (cfg.host) {
       $('host').value = cfg.host;
       $('port').value = cfg.port || 21;

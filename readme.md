@@ -61,7 +61,7 @@ If the file is missing or the host, port, passive fields are empty — user inpu
 ### Session lifetime
 
 Auth credentials and UI state (sorting, theme, language, sidebar width) are stored in browser cookies.
-Cookie lifetime is controlled by `sessionLifetime` (in minutes). If not set, the default is 43200 minutes (30 days).
+Cookie lifetime is controlled by `sessionLifetime` (in minutes). If not set, the default is 180 minutes (3 hours).
 Cookies persist across page reloads and browser restarts; each successful login refreshes the lifetime.
 
 ### Example File
@@ -72,7 +72,7 @@ host: "192.168.1.1" # Host to connect to
 port: 2121          # Custom FTP connection port
 passive: true       # Enable passive FTP mode
 title: "File Manager" # Custom application title
-sessionLifetime: 43200 # Cookie lifetime in minutes (default 43200 = 30 days)
+sessionLifetime: 180 # Cookie lifetime in minutes (default 180 = 3 hours)
 ```
 ## License
 

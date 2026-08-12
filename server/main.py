@@ -428,7 +428,7 @@ async def api_config():
         "port": cfg.get("port") or 0,
         "passive": cfg.get("passive") if "passive" in cfg else None,
         "title": cfg.get("title") or "",
-        "sessionLifetime": cfg.get("sessionLifetime") or 43200,
+        "sessionLifetime": cfg.get("sessionLifetime") or 180,
     }
 
 
