@@ -616,12 +616,6 @@ function renderTreeNode(parent, path, node, depth) {
       ph.textContent = '…';
       ph.style.paddingLeft = (24 + depth * 16) + 'px';
       parent.appendChild(ph);
-    } else if (node.items.length === 0) {
-      const em = document.createElement('div');
-      em.className = 'tree-empty';
-      em.textContent = '—';
-      em.style.paddingLeft = (24 + depth * 16) + 'px';
-      parent.appendChild(em);
     } else {
       for (const item of node.items) {
         const childPath = joinPath(path, item.name);
