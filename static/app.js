@@ -24,8 +24,12 @@ function connect() {
 
   ws.onopen = () => {
     $('splash').classList.add('hidden');
+    const token = getCookie('ffm_auth');
     const saved = getCookie('authHost');
-    if (saved) {
+    if (token) {
+      lastAuth = { token };
+      send('auth', lastAuth);
+    } else if (saved) {
       lastAuth = {
         host: saved,
         port: parseInt(getCookie('authPort'), 10) || 21,
@@ -75,9 +79,9 @@ function handleMsg(msg) {
       syncSidebarResizer();
       renderBreadcrumb(msg.cwd);
       renderListing();
-      // save session for F5 persistence (real creds, not empty form fields)
-      if (lastAuth) {
-        saveAuthSession(lastAuth.host, lastAuth.port, lastAuth.user, lastAuth.pass, lastAuth.passive);
+      // save encrypted session token for F5 persistence
+      if (lastAuth && msg.token) {
+        saveAuthToken(msg.token);
       }
       break;
 
@@ -223,16 +227,14 @@ function fmtDate(raw) {
   return raw;
 }
 
-function saveAuthSession(host, port, user, pass, passive) {
-  setCookie('authHost', host);
-  setCookie('authPort', String(port));
-  setCookie('authUser', user);
-  setCookie('authPass', pass);
-  setCookie('authPassive', String(passive));
+function saveAuthToken(token) {
+  setCookie('ffm_auth', token);
+  ['authHost', 'authPort', 'authUser', 'authPass', 'authPassive']
+    .forEach(k => removeCookie(k));
 }
 
 function clearAuthSession() {
-  ['authHost', 'authPort', 'authUser', 'authPass', 'authPassive']
+  ['ffm_auth', 'authHost', 'authPort', 'authUser', 'authPass', 'authPassive']
     .forEach(k => removeCookie(k));
 }
 

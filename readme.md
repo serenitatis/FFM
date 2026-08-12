@@ -64,6 +64,30 @@ Auth credentials and UI state (sorting, theme, language, sidebar width) are stor
 Cookie lifetime is controlled by `sessionLifetime` (in minutes). If not set, the default is 180 minutes (3 hours).
 Cookies persist across page reloads and browser restarts; each successful login refreshes the lifetime.
 
+### Auth cookie encryption key
+
+FTP credentials are never stored in the browser in plaintext. On login the server encrypts them
+(AES-256-GCM) into a single opaque cookie (`ffm_auth`), which is sent back on reconnect and
+decrypted server-side. The encryption key is resolved in this order:
+
+1. `cookieKey` in `config/config.yaml` — hex string, 64 characters (32 bytes of AES-256)
+2. Environment variable `FFM_COOKIE_KEY`
+
+If neither is set, no token is issued — authentication works, but the session is not persisted and
+the login form appears on every page reload.
+
+Set a fixed key to keep sessions valid across deployments:
+
+```bash
+python -c "import secrets; print(secrets.token_hex(32))"
+```
+
+Then put the output into `config/config.yaml`:
+
+```yaml
+cookieKey: 2f7b9c...  # 64 hex chars, replace with the generated value
+```
+
 ### Example File
 
 ```yaml
@@ -73,6 +97,7 @@ port: 2121          # Custom FTP connection port
 passive: true       # Enable passive FTP mode
 title: "File Manager" # Custom application title
 sessionLifetime: 180 # Cookie lifetime in minutes (default 180 = 3 hours)
+cookieKey: "" # Optional: hex 64 chars AES key for the auth cookie; else env FFM_COOKIE_KEY; if neither set — no persistent session
 ```
 ## License
 

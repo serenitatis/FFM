@@ -3,12 +3,14 @@ import json
 import asyncio
 import os
 import base64
+import secrets
 import zipfile
 from io import BytesIO
 from datetime import datetime
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse, Response
 from fastapi.staticfiles import StaticFiles
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 from typing import Optional
 from server.backends import BackendFactory, BackendError, FileBackend
@@ -66,6 +68,42 @@ def norm_path(path: str) -> str:
     return "/" + "/".join(stack) if stack else "/"
 
 
+_COOKIE_KEY: Optional[bytes] = None
+
+
+def get_cookie_key() -> Optional[bytes]:
+    global _COOKIE_KEY
+    if _COOKIE_KEY is not None:
+        return _COOKIE_KEY
+    cfg = load_config()
+    raw = cfg.get("cookieKey") or os.environ.get("FFM_COOKIE_KEY") or ""
+    if raw:
+        _COOKIE_KEY = bytes.fromhex(raw) if len(raw) == 64 else raw.encode("utf-8")
+    return _COOKIE_KEY
+
+
+def encrypt_auth(params: dict) -> Optional[str]:
+    key = get_cookie_key()
+    if key is None:
+        return None
+    nonce = secrets.token_bytes(12)
+    ct = AESGCM(key).encrypt(nonce, json.dumps(params).encode("utf-8"), None)
+    return "v1:" + base64.urlsafe_b64encode(nonce + ct).decode("ascii")
+
+
+def decrypt_auth(token: str) -> Optional[dict]:
+    if not token.startswith("v1:"):
+        return None
+    try:
+        blob = base64.urlsafe_b64decode(token[3:].encode("ascii"))
+        nonce, ct = blob[:12], blob[12:]
+        data = AESGCM(get_cookie_key()).decrypt(nonce, ct, None)
+        params = json.loads(data.decode("utf-8"))
+        return params if isinstance(params, dict) else None
+    except Exception:
+        return None
+
+
 async def handle_msg(ws: WebSocket, data: dict, sess: dict):
     action = data.get("action", "")
     params = data.get("params", {})
@@ -114,8 +152,16 @@ async def handle_msg(ws: WebSocket, data: dict, sess: dict):
 
     async with lock:
         if action == "auth":
+            token = params.get("token") if isinstance(params, dict) else None
             cfg = load_config()
             backend_type = cfg.get("backend", "ftp")
+            if token:
+                auth_params = decrypt_auth(token)
+                if not auth_params:
+                    await ws.send_json({"type": "auth_error", "msg": "Session expired. Please log in again."})
+                    return
+                backend_type = auth_params.get("backend", backend_type)
+                params = auth_params
             try:
                 be = await BackendFactory.create(backend_type, params)
                 sess["backend"] = be
@@ -124,7 +170,11 @@ async def handle_msg(ws: WebSocket, data: dict, sess: dict):
                 sess["auth_params"] = auth_params
                 cwd = await be.getcwd()
                 items = await be.list_dir(cwd)
-                await ws.send_json({"type": "auth_ok", "cwd": cwd, "items": [i.to_dict() for i in items]})
+                token = encrypt_auth(auth_params)
+                msg = {"type": "auth_ok", "cwd": cwd, "items": [i.to_dict() for i in items]}
+                if token:
+                    msg["token"] = token
+                await ws.send_json(msg)
             except (BackendError, Exception) as e:
                 await ws.send_json({"type": "auth_error", "msg": str(e)})
             return

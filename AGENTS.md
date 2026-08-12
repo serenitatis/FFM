@@ -44,13 +44,13 @@ FTP servers drop idle connections (~600s). Client sends `ping` via WebSocket eve
 
 ## Config (`config/config.yaml`)
 Hand-parsed via `partition(":")` — no PyYAML. Bool/int auto-detected. Empty/missing file → login fields editable.
-Keys: `backend` (default `"ftp"`), `host`, `port`, `passive`, `title`, `use_headers` (false by default; enables `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy` on static responses), `sessionLifetime` (minutes, optional; default 180 = 3 hours; drives cookie lifetime).
+Keys: `backend` (default `"ftp"`), `host`, `port`, `passive`, `title`, `use_headers` (false by default; enables `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy` on static responses), `sessionLifetime` (minutes, optional; default 180 = 3 hours; drives cookie lifetime), `cookieKey` (hex 64 chars, optional; AES key for auth token, else env `FFM_COOKIE_KEY`; if neither set — no persistent session, login form on every reload).
 
 ## Security notes
 - Path traversal in `/i18n/{name}` prevents `..`, `/`, `\`, `:` in filename + `realpath` boundary check.
 - XSS prevention: `esc()` in `static/app.js` (`&`, `<`, `>`, `"`, `'` → HTML entities) wraps all FTP-originated data in `innerHTML`.
 - Security headers (`nosniff`, `DENY`, `no-referrer`) only active when `use_headers: true` in config. Default off because `FileResponse` + `nosniff` on Windows may serve `.js` as `text/plain` (mimetypes misdetection).
-- FTP credentials stored in session memory + browser cookies. No encryption.
+- FTP credentials stored in session memory (server-side) + browser cookie as AES-256-GCM token (key server-only). Plaintext creds never persist in the browser.
 
 ## Session management
 - `sessions: dict[str, dict]` (in-memory UUID keys). Fields: `backend`, `lock`, `gen`, `cancelled`, `upload_buf`, `upload_path`, `auth_params`, `sid`, `write_task`, `bg_task`.
@@ -63,7 +63,8 @@ Keys: `backend` (default `"ftp"`), `host`, `port`, `passive`, `title`, `use_head
 - **Clipboard**: `{ paths: [...], cut: bool }`. Paste serial via `pasteNext()`.
 - **Op progress** in `#op-bar`: spinner + verb + filename + bar + %. Hides 500ms after `ok`.
 - **State in cookies** (`Path=/; SameSite=Lax; Secure` on https): auth, sort, theme, lang, sidebarWidth. Lifetime = `sessionLifetime` (minutes) from `/api/config`, default 180 (3 hours). Helpers `getCookie/setCookie/removeCookie` in `lang.js`; old `sessionStorage` values migrate on first read.
-- **Auth cookies written from `lastAuth`**, not form fields: `auth_ok` calls `saveAuthSession(lastAuth...)`. `lastAuth` set in `ws.onopen` (auto-login from cookies) and form submit. Never read form inputs there — after F5 they're empty and would overwrite valid cookies with `""` (causes "login form appears on reload" bug). `logout` clears `lastAuth`.
+- **Auth cookie is an encrypted token, not credentials**: `auth_ok` returns `token` (AES-256-GCM over `auth_params`, format `v1:<base64url(nonce‖ct)>`); client stores it in single `ffm_auth` cookie via `saveAuthToken()`. `ws.onopen` sends `{token}`; server `decrypt_auth()` rebuilds backend. FTP creds never live in browser plaintext. Server key from config `cookieKey` (hex 64 chars) → else env `FFM_COOKIE_KEY` → else no token issued (no persistent session, login form on every reload). Legacy `authHost/authPort/authUser/authPass/authPassive` cookies auto-migrate once, then get removed. `logout` clears `lastAuth` + `ffm_auth`.
+- **Token read on `ws.onopen` / form submit** from `lastAuth`; never read form inputs there — after F5 they're empty and would overwrite valid cookie with `""` (causes "login form appears on reload" bug).
 - **Sidebar tree** (`#folder-sidebar`): lazy-load via `list_items`, `folderTree = Map<path, {loaded,loading,expanded,items}>`. Root = `basePath` (cwd from `auth_ok`), NOT `/`. Click folder = navigate + expand; chevron = toggle. Files render as leaf rows. Context menu on sidebar items uses `ctxBasePath` (parent dir); select/select_all hidden. Width persisted via `sidebarWidth` cookie, drag handle `#sidebar-resizer` (desktop only). Home (breadcrumb) icon → `navigate('/')` + `collapseFolderTree()`. Top-level placeholder `#empty-root` ("Choose folder") shows when `currentPath === basePath`; `navigateUp` boundary is `basePath`.
 - **Splash screen**: `#splash` (logo + spinner) shown on load until `ws.onopen`; prevents login-form flash. `auth-overlay` starts `hidden`.
 - **Cache-busting**: `app.js?v=9`, `lang.js?v=9` hardcoded in `index.html`.
