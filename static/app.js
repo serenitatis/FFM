@@ -1,4 +1,4 @@
-const APP_VERSION = '0.51.0'; // do not auto increment!
+const APP_VERSION = '0.61.0'; // do not auto increment!
 const isTouchDevice = window.matchMedia('(pointer: coarse)').matches;
 let ws = null;
 let currentPath = '/';
@@ -10,6 +10,9 @@ let lastClickedIndex = null;
 let lastMoveSource = null;
 let selectMode = false;
 let pingInterval = null;
+let basePath = '/';
+let folderTree = new Map();
+let lastAuth = null;
 
 const $ = id => document.getElementById(id);
 function esc(s) { return String(s).replace(/[&<>"']/g, function(m) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]; }); }
@@ -20,15 +23,17 @@ function connect() {
   ws = new WebSocket(`${proto}//${location.host}/ws`);
 
   ws.onopen = () => {
-    const saved = sessionStorage.getItem('authHost');
+    $('splash').classList.add('hidden');
+    const saved = getCookie('authHost');
     if (saved) {
-      send('auth', {
+      lastAuth = {
         host: saved,
-        port: parseInt(sessionStorage.getItem('authPort'), 10) || 21,
-        user: sessionStorage.getItem('authUser') || '',
-        pass: sessionStorage.getItem('authPass') || '',
-        passive: sessionStorage.getItem('authPassive') !== 'false',
-      });
+        port: parseInt(getCookie('authPort'), 10) || 21,
+        user: getCookie('authUser') || '',
+        pass: getCookie('authPass') || '',
+        passive: getCookie('authPassive') !== 'false',
+      };
+      send('auth', lastAuth);
     } else {
       $('auth-overlay').classList.remove('hidden');
     }
@@ -36,6 +41,7 @@ function connect() {
   };
 
   ws.onclose = () => {
+    $('splash').classList.add('hidden');
     $('main').classList.add('hidden');
     $('auth-overlay').classList.remove('hidden');
     $('auth-error').textContent = __('connection_lost');
@@ -60,22 +66,23 @@ function handleMsg(msg) {
     case 'auth_ok':
       currentPath = msg.cwd;
       currentItems = msg.items;
+      basePath = msg.cwd;
+      initFolderTree();
       $('auth-overlay').classList.add('hidden');
       $('auth-error').classList.add('hidden');
       $('main').classList.remove('hidden');
+      applySidebarWidth();
+      syncSidebarResizer();
       renderBreadcrumb(msg.cwd);
       renderListing();
-      // save session for F5 persistence
-      saveAuthSession(
-        $('host').value,
-        parseInt($('port').value, 10) || 21,
-        $('username').value,
-        $('password').value,
-        $('passive').checked,
-      );
+      // save session for F5 persistence (real creds, not empty form fields)
+      if (lastAuth) {
+        saveAuthSession(lastAuth.host, lastAuth.port, lastAuth.user, lastAuth.pass, lastAuth.passive);
+      }
       break;
 
     case 'auth_error':
+      $('splash').classList.add('hidden');
       clearAuthSession();
       $('auth-error').textContent = msg.msg;
       $('auth-error').classList.remove('hidden');
@@ -87,6 +94,20 @@ function handleMsg(msg) {
       currentItems = msg.items;
       renderBreadcrumb(msg.path);
       renderListing();
+      revealInTree(msg.path);
+      break;
+
+    case 'list_items_ok':
+      {
+        const node = folderTree.get(msg.path);
+        if (node) {
+          node.loaded = true;
+          node.loading = false;
+          node.items = msg.items;
+          sortSidebarItems(node.items);
+          renderSidebar();
+        }
+      }
       break;
 
     case 'upload_started':
@@ -118,6 +139,7 @@ function handleMsg(msg) {
       clearTimeout(opTimer);
       opTimer = setTimeout(() => hideOpBar(), 500);
       refresh();
+      refreshFolderTree();
       if (uploading) {
         uploadNext();
       } else if (_pasteQueue) {
@@ -202,16 +224,16 @@ function fmtDate(raw) {
 }
 
 function saveAuthSession(host, port, user, pass, passive) {
-  sessionStorage.setItem('authHost', host);
-  sessionStorage.setItem('authPort', String(port));
-  sessionStorage.setItem('authUser', user);
-  sessionStorage.setItem('authPass', pass);
-  sessionStorage.setItem('authPassive', String(passive));
+  setCookie('authHost', host);
+  setCookie('authPort', String(port));
+  setCookie('authUser', user);
+  setCookie('authPass', pass);
+  setCookie('authPassive', String(passive));
 }
 
 function clearAuthSession() {
   ['authHost', 'authPort', 'authUser', 'authPass', 'authPassive']
-    .forEach(k => sessionStorage.removeItem(k));
+    .forEach(k => removeCookie(k));
 }
 
 function joinPath(base, name) {
@@ -231,8 +253,8 @@ function iconDirUp() {
 
 /* ───── sort ───── */
 function getSort() {
-  let col = sessionStorage.getItem('sortCol');
-  let dir = sessionStorage.getItem('sortDir');
+  let col = getCookie('sortCol');
+  let dir = getCookie('sortDir');
   return {
     col: col || 'name',
     dir: dir === 'desc' ? 'desc' : 'asc',
@@ -240,8 +262,8 @@ function getSort() {
 }
 
 function saveSort(col, dir) {
-  sessionStorage.setItem('sortCol', col);
-  sessionStorage.setItem('sortDir', dir);
+  setCookie('sortCol', col);
+  setCookie('sortDir', dir);
 }
 
 function sortItems() {
@@ -285,6 +307,16 @@ function renderListing() {
 
   const tbody = $('file-list');
   tbody.innerHTML = '';
+
+  const empty = $('empty-root');
+  const table = $('file-list').closest('table');
+  if (currentPath === basePath) {
+    table.classList.add('hidden');
+    if (empty) empty.classList.remove('hidden');
+    return;
+  }
+  table.classList.remove('hidden');
+  if (empty) empty.classList.add('hidden');
 
   if (currentPath !== '/') {
     const tr = document.createElement('tr');
@@ -406,8 +438,8 @@ function renderListing() {
 
     tbody.appendChild(tr);
   }
-  const table = tbody.closest('table');
-  if (table) table.classList.toggle('select-mode', selectMode);
+  const listTable = tbody.closest('table');
+  if (listTable) listTable.classList.toggle('select-mode', selectMode);
 }
 
 function renderBreadcrumb(path) {
@@ -419,7 +451,10 @@ function renderBreadcrumb(path) {
   const root = document.createElement('span');
   root.className = 'cursor-pointer';
   root.innerHTML = '<i class="fas fa-home"></i>';
-  root.addEventListener('click', () => navigate('/'));
+  root.addEventListener('click', () => {
+    navigate('/');
+    collapseFolderTree();
+  });
   el.appendChild(root);
 
   let acc = '';
@@ -445,13 +480,295 @@ function navigate(path) {
 }
 
 function navigateUp() {
-  if (currentPath === '/') return;
+  if (currentPath === basePath || currentPath === '/') return;
   const parent = currentPath.replace(/\/+$/, '').split('/').slice(0, -1).join('/') || '/';
   navigate(parent);
 }
 
 function refresh() {
   navigate(currentPath);
+}
+
+/* ───── folder sidebar tree ───── */
+function treeKey(path) {
+  return path.replace(/\/+$/, '') || '/';
+}
+
+function initFolderTree() {
+  folderTree.clear();
+  const key = treeKey(basePath);
+  folderTree.set(key, { loaded: false, loading: false, expanded: true, items: [] });
+  requestDir(key);
+}
+
+function requestDir(path) {
+  const node = folderTree.get(treeKey(path));
+  if (!node || node.loading || node.loaded) return;
+  node.loading = true;
+  renderSidebar();
+  send('list_items', { path });
+}
+
+function sortSidebarItems(items) {
+  items.sort((a, b) => {
+    if (a.type !== b.type) return a.type === 'dir' ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
+}
+
+function renderSidebar() {
+  const el = $('folder-tree');
+  el.innerHTML = '';
+  const key = treeKey(basePath);
+  const node = folderTree.get(key);
+  if (node) renderTreeNode(el, key, node, 0);
+}
+
+function pathName(path) {
+  const k = treeKey(path);
+  return k.split('/').filter(Boolean).pop() || '';
+}
+
+function parentDir(path) {
+  const k = treeKey(path);
+  const idx = k.lastIndexOf('/');
+  return idx <= 0 ? '/' : k.slice(0, idx);
+}
+
+function sidebarCtxHandlers(row, item, ctxBase) {
+  if (isTouchDevice) {
+    let timer;
+    row.addEventListener('touchstart', e => {
+      const touch = e.touches[0];
+      timer = setTimeout(() => {
+        row._ctxHandled = true;
+        showCtx({ clientX: touch.clientX, clientY: touch.clientY }, item, ctxBase);
+      }, 500);
+    }, { passive: true });
+    row.addEventListener('touchend', () => clearTimeout(timer));
+    row.addEventListener('touchmove', () => clearTimeout(timer));
+  } else {
+    row.addEventListener('contextmenu', e => {
+      e.preventDefault();
+      e.stopPropagation();
+      showCtx(e, item, ctxBase);
+    });
+  }
+}
+
+function renderTreeNode(parent, path, node, depth) {
+  const row = document.createElement('div');
+  row.className = 'tree-node' + (path === treeKey(currentPath) ? ' active' : '') + (node.expanded ? ' expanded' : '');
+  row.style.paddingLeft = (8 + depth * 16) + 'px';
+  row.dataset.path = path;
+
+  const chevron = document.createElement('span');
+  chevron.className = 'tree-chevron';
+  if (node.loading) {
+    chevron.className = 'tree-spinner';
+    chevron.innerHTML = '<i class="fas fa-spinner"></i>';
+  } else if (node.expanded && node.loaded && node.items.length === 0) {
+    chevron.className = 'tree-chevron leaf';
+  } else {
+    chevron.innerHTML = '<i class="fas fa-chevron-right"></i>';
+  }
+  row.appendChild(chevron);
+
+  const icon = document.createElement('span');
+  icon.className = 'tree-icon';
+  icon.innerHTML = '<i class="fas fa-folder"></i>';
+  row.appendChild(icon);
+
+  const label = document.createElement('span');
+  label.className = 'tree-label';
+  label.textContent = pathName(path) || '/';
+  row.appendChild(label);
+
+  row.addEventListener('click', e => {
+    if (row._ctxHandled) { row._ctxHandled = false; return; }
+    if (e.target.closest('.tree-chevron') || e.target.closest('.tree-spinner')) {
+      if (!node.loading) {
+        node.expanded = !node.expanded;
+        if (node.expanded) requestDir(path);
+        renderSidebar();
+      }
+      return;
+    }
+    navigate(path);
+    const n = folderTree.get(treeKey(path));
+    if (n) {
+      n.expanded = true;
+      requestDir(path);
+    }
+    closeSidebar();
+  });
+
+  parent.appendChild(row);
+
+  const isRoot = path === treeKey(basePath);
+  const ctxItemForRow = isRoot ? null : { name: pathName(path) || '/', type: 'dir', path };
+  sidebarCtxHandlers(row, ctxItemForRow, isRoot ? path : parentDir(path));
+
+  if (node.expanded) {
+    if (!node.loaded) {
+      const ph = document.createElement('div');
+      ph.className = 'tree-empty';
+      ph.textContent = '…';
+      ph.style.paddingLeft = (24 + depth * 16) + 'px';
+      parent.appendChild(ph);
+    } else if (node.items.length === 0) {
+      const em = document.createElement('div');
+      em.className = 'tree-empty';
+      em.textContent = '—';
+      em.style.paddingLeft = (24 + depth * 16) + 'px';
+      parent.appendChild(em);
+    } else {
+      for (const item of node.items) {
+        const childPath = joinPath(path, item.name);
+        if (item.type === 'dir') {
+          let child = folderTree.get(treeKey(childPath));
+          if (!child) {
+            child = { loaded: false, loading: false, expanded: false, items: [] };
+            folderTree.set(treeKey(childPath), child);
+          }
+          renderTreeNode(parent, childPath, child, depth + 1);
+        } else {
+          renderFileRow(parent, childPath, item, depth);
+        }
+      }
+    }
+  }
+}
+
+function renderFileRow(parent, path, item, depth) {
+  const row = document.createElement('div');
+  row.className = 'tree-node';
+  row.style.paddingLeft = (8 + depth * 16) + 'px';
+  row.dataset.path = path;
+
+  const chevron = document.createElement('span');
+  chevron.className = 'tree-chevron leaf';
+  row.appendChild(chevron);
+
+  const icon = document.createElement('span');
+  icon.className = 'tree-icon';
+  icon.style.color = '#6b7280';
+  icon.innerHTML = '<i class="far fa-file"></i>';
+  row.appendChild(icon);
+
+  const label = document.createElement('span');
+  label.className = 'tree-label';
+  label.textContent = item.name;
+  row.appendChild(label);
+
+  row.addEventListener('click', e => {
+    if (row._ctxHandled) { row._ctxHandled = false; return; }
+  });
+  sidebarCtxHandlers(row, item, parentDir(path));
+  parent.appendChild(row);
+}
+
+function revealInTree(path) {
+  const base = treeKey(basePath);
+  const target = treeKey(path);
+  const prefix = base === '/' ? '' : base + '/';
+  const rel = target === base ? '' : target.startsWith(prefix) ? target.slice(prefix.length) : '';
+  let cur = base;
+  for (const seg of rel.split('/').filter(Boolean)) {
+    cur = joinPath(cur, seg);
+    const key = treeKey(cur);
+    let node = folderTree.get(key);
+    if (!node) {
+      node = { loaded: false, loading: false, expanded: false, items: [] };
+      folderTree.set(key, node);
+    }
+    node.expanded = true;
+    requestDir(cur);
+  }
+  requestDir(base);
+  renderSidebar();
+}
+
+function refreshFolderTree() {
+  const keys = [...folderTree.keys()].filter(k => {
+    const n = folderTree.get(k);
+    return n && n.expanded && n.loaded && !n.loading;
+  });
+  if (keys.length === 0) return;
+  keys.forEach(k => {
+    const n = folderTree.get(k);
+    n.loaded = false;
+    n.loading = true;
+    send('list_items', { path: k });
+  });
+  renderSidebar();
+}
+
+function collapseFolderTree() {
+  folderTree.clear();
+  const key = treeKey(basePath);
+  folderTree.set(key, { loaded: false, loading: false, expanded: true, items: [] });
+  requestDir(key);
+}
+
+function openSidebar() {
+  $('folder-sidebar').classList.add('open');
+  $('sidebar-backdrop').classList.remove('hidden');
+}
+
+function closeSidebar() {
+  $('folder-sidebar').classList.remove('open');
+  $('sidebar-backdrop').classList.add('hidden');
+}
+
+function toggleSidebar() {
+  if ($('folder-sidebar').classList.contains('open')) closeSidebar();
+  else openSidebar();
+}
+
+/* ───── sidebar resize ───── */
+function syncSidebarResizer() {
+  const sb = $('folder-sidebar');
+  const rz = $('sidebar-resizer');
+  if (!sb || !rz) return;
+  rz.style.left = (sb.offsetWidth - 3) + 'px';
+}
+
+function applySidebarWidth() {
+  const saved = getCookie('sidebarWidth');
+  const sb = $('folder-sidebar');
+  if (sb && saved) sb.style.width = saved + 'px';
+  syncSidebarResizer();
+}
+
+function initSidebarResize() {
+  const sb = $('folder-sidebar');
+  const rz = $('sidebar-resizer');
+  if (!sb || !rz) return;
+
+  rz.addEventListener('mousedown', e => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = sb.offsetWidth;
+    const MIN = 160, MAX = 400;
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'col-resize';
+
+    const onMove = ev => {
+      const w = Math.min(MAX, Math.max(MIN, startW + (ev.clientX - startX)));
+      sb.style.width = w + 'px';
+      syncSidebarResizer();
+    };
+    const onUp = () => {
+      setCookie('sidebarWidth', sb.offsetWidth);
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
 }
 
 /* ───── operation status bar ───── */
@@ -526,7 +843,7 @@ function applyTheme(mode) {
 }
 
 function onSystemChange() {
-  const mode = sessionStorage.getItem('themeMode') || 'auto';
+  const mode = getCookie('themeMode') || 'auto';
   if (mode === 'auto') applyTheme('auto');
 }
 
@@ -537,7 +854,7 @@ function startThemeListener() {
 
 function initTheme() {
   startThemeListener();
-  const saved = sessionStorage.getItem('themeMode') || 'auto';
+  const saved = getCookie('themeMode') || 'auto';
   applyTheme(saved);
 }
 
@@ -711,16 +1028,19 @@ const MENU_ITEMS_SELECT = [
   { action: 'select', icon: 'fa-check-square', i18n: 'select' },
 ];
 
-function showCtx(e, item) {
+let ctxBasePath = null;
+
+function showCtx(e, item, sidePath) {
   ctxItem = item;
+  ctxBasePath = sidePath || currentPath;
   const menu = $('ctx-menu');
 
   const list = [...MENU_ITEMS];
 
   if (item) list.push(...MENU_ITEMS_FILE);
 
-  if (item) list.push(...MENU_ITEMS_SELECT);
-  list.push({ action: 'select_all', icon: 'fa-check-double', i18n: 'select_all' });
+  if (item && !sidePath) list.push(...MENU_ITEMS_SELECT);
+  if (!sidePath) list.push({ action: 'select_all', icon: 'fa-check-double', i18n: 'select_all' });
 
   if (clipboard) {
     const pasteItem = {
@@ -758,14 +1078,16 @@ function showCtx(e, item) {
 function hideCtx() {
   $('ctx-menu').classList.add('hidden');
   ctxItem = null;
+  ctxBasePath = null;
 }
 
 function ctxAction(action) {
+  const base = ctxBasePath || currentPath;
   switch (action) {
     case 'mkdir': {
       const name = prompt(__('new_folder_name'));
       if (!name) return;
-      send('mkdir', { path: joinPath(currentPath, name) });
+      send('mkdir', { path: joinPath(base, name) });
       break;
     }
 
@@ -784,16 +1106,18 @@ function ctxAction(action) {
       break;
 
     case 'copy':
+    case 'cut': {
       if (!ctxItem) break;
-      clipboard = { paths: [...selectedNames].map(n => joinPath(currentPath, n)), cut: false };
+      let paths;
+      if (selectedNames.size > 0) {
+        paths = [...selectedNames].map(n => joinPath(base, n));
+      } else {
+        paths = [joinPath(base, ctxItem.name)];
+      }
+      clipboard = { paths, cut: action === 'cut' };
       exitSelectMode();
       break;
-
-    case 'cut':
-      if (!ctxItem) break;
-      clipboard = { paths: [...selectedNames].map(n => joinPath(currentPath, n)), cut: true };
-      exitSelectMode();
-      break;
+    }
 
     case 'paste':
       if (!clipboard) break;
@@ -801,8 +1125,8 @@ function ctxAction(action) {
         paths: [...clipboard.paths],
         act: clipboard.cut ? 'move' : 'copy',
         dest: ctxItem && ctxItem.type === 'dir'
-          ? joinPath(currentPath, ctxItem.name)
-          : currentPath,
+          ? joinPath(base, ctxItem.name)
+          : base,
       };
       clipboard = null;
       pasteNext();
@@ -813,9 +1137,11 @@ function ctxAction(action) {
       const targets = selectedNames.size > 0 ? [...selectedNames] : [ctxItem.name];
       if (!confirm(__('delete_confirm', targets.length))) break;
       for (const name of targets) {
-        const type = currentItems.find(i => i.name === name)?.type || 'file';
+        const type = selectedNames.size > 0
+          ? (currentItems.find(i => i.name === name)?.type || 'file')
+          : (ctxItem.type || 'file');
         send(type === 'dir' ? 'rmdir' : 'delete', {
-          path: joinPath(currentPath, name),
+          path: joinPath(base, name),
         });
       }
       selectedNames.clear();
@@ -825,11 +1151,18 @@ function ctxAction(action) {
 
     case 'download':
       if (!ctxItem) break;
-      if (selectedNames.size > 1 || ctxItem.type === 'dir') {
+      if (selectedNames.size > 0) {
+        if (selectedNames.size > 1 || ctxItem.type === 'dir') {
+          showOpBar(`<i class="fas fa-download"></i> ${__('preparing_archive')}`);
+          send('download_zip_request', { paths: [...selectedNames].map(n => joinPath(base, n)) });
+        } else {
+          send('download_request', { path: joinPath(base, [...selectedNames][0]) });
+        }
+      } else if (ctxItem.type === 'dir') {
         showOpBar(`<i class="fas fa-download"></i> ${__('preparing_archive')}`);
-        send('download_zip_request', { paths: [...selectedNames].map(n => joinPath(currentPath, n)) });
+        send('download_zip_request', { paths: [joinPath(base, ctxItem.name)] });
       } else {
-        send('download_request', { path: joinPath(currentPath, ctxItem.name) });
+        send('download_request', { path: joinPath(base, ctxItem.name) });
       }
       selectedNames.clear();
       exitSelectMode();
@@ -837,32 +1170,81 @@ function ctxAction(action) {
 
     case 'rename':
       if (!ctxItem) break;
-      if (selectedNames.size !== 1) break;
-      const item = currentItems.find(i => i.name === [...selectedNames][0]);
-      if (!item) break;
-      const newName = prompt(__('rename', item.name), item.name);
-      if (!newName || newName === item.name) break;
-      send('rename', { source: joinPath(currentPath, item.name), dest: joinPath(currentPath, newName) });
+      if (selectedNames.size > 0 && selectedNames.size !== 1) break;
+      if (selectedNames.size === 1) {
+        const selItem = currentItems.find(i => i.name === [...selectedNames][0]);
+        if (!selItem) break;
+        const newName = prompt(__('rename', selItem.name), selItem.name);
+        if (!newName || newName === selItem.name) break;
+        send('rename', { source: joinPath(base, selItem.name), dest: joinPath(base, newName) });
+      } else {
+        const newName = prompt(__('rename', ctxItem.name), ctxItem.name);
+        if (!newName || newName === ctxItem.name) break;
+        send('rename', { source: joinPath(base, ctxItem.name), dest: joinPath(base, newName) });
+      }
       break;
 
     case 'properties':
       if (!ctxItem) break;
-      send('properties', { path: joinPath(currentPath, ctxItem.name) });
+      send('properties', { path: joinPath(base, ctxItem.name) });
       break;
   }
 }
 
 /* ───── properties modal ───── */
+function copyToClipboard(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    return navigator.clipboard.writeText(text).then(() => true).catch(() => fallbackCopy(text));
+  }
+  return Promise.resolve(fallbackCopy(text));
+}
+
+function fallbackCopy(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch (_) {}
+  document.body.removeChild(ta);
+  return ok;
+}
+
+function flashPathCopied() {
+  const icon = $('props-path-icon');
+  if (!icon) return;
+  icon.className = 'fas fa-check text-blue-600 dark:text-blue-400';
+  setTimeout(() => { icon.className = 'fas fa-copy text-gray-400 dark:text-slate-500'; }, 1500);
+}
+
 function showProperties(props) {
   const icon = props.type === 'dir'
     ? '<i class="fas fa-folder"></i>'
     : '<i class="far fa-file"></i>';
   const typeLabel = props.type === 'dir' ? __('folder') : __('file');
+  const fullPath = props.path || props.name;
   $('props-body').innerHTML =
-    `<p>${icon} <strong>${__('name_label')}</strong> ${esc(props.name)}</p>` +
+    `<p>${icon} <strong>${__('path_label')}</strong> ` +
+    `<span id="props-path" class="cursor-pointer select-all props-path">${esc(fullPath)}</span> ` +
+    `<i id="props-path-icon" class="fas fa-copy text-gray-400 dark:text-slate-500 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400" title="${__('copy_path')}"></i></p>` +
     `<p><i class="fas fa-tag"></i> <strong>${__('type_label')}</strong> ${esc(typeLabel)}</p>` +
     `<p><i class="fas fa-weight-hanging"></i> <strong>${__('size_label')}</strong> ${props.type === 'dir' ? '—' : fmtSize(props.size)}</p>` +
     `<p><i class="far fa-calendar-alt"></i> <strong>${__('date_label')}</strong> ${esc(fmtDate(props.date))}</p>`;
+  const pathEl = $('props-path');
+  if (pathEl) {
+    pathEl.addEventListener('click', e => {
+      const name = fullPath.split('/').filter(Boolean).pop() || '';
+      copyToClipboard((e.ctrlKey || e.metaKey) ? name : fullPath).then(flashPathCopied);
+    });
+  }
+  const pathIcon = $('props-path-icon');
+  if (pathIcon) {
+    pathIcon.addEventListener('click', () => {
+      copyToClipboard(fullPath).then(flashPathCopied);
+    });
+  }
   $('props-overlay').classList.remove('hidden');
 }
 
@@ -871,6 +1253,7 @@ async function loadConfig() {
   try {
     const resp = await fetch('/api/config');
     const cfg = await resp.json();
+    cookieLifetimeMin = cfg.sessionLifetime || 43200;
     if (cfg.host) {
       $('host').value = cfg.host;
       $('port').value = cfg.port || 21;
@@ -913,13 +1296,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('auth-form').addEventListener('submit', e => {
     e.preventDefault();
     $('auth-error').classList.add('hidden');
-    send('auth', {
+    lastAuth = {
       host: $('host').value,
       port: parseInt($('port').value, 10) || 21,
       user: $('username').value,
       pass: $('password').value,
       passive: $('passive').checked,
-    });
+    };
+    send('auth', lastAuth);
   });
 
   $('btn-refresh').addEventListener('click', refresh);
@@ -930,7 +1314,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     send('mkdir', { path: joinPath(currentPath, name) });
   });
   if ($('auth-btn-theme')) $('auth-btn-theme').addEventListener('change', function () {
-    sessionStorage.setItem('themeMode', this.value);
+    setCookie('themeMode', this.value);
     applyTheme(this.value);
   });
   document.querySelectorAll('.lang-select').forEach(sel => {
@@ -946,8 +1330,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     $('menu-dropdown').classList.toggle('hidden');
   });
 
+  /* folder sidebar drawer (mobile) */
+  if ($('btn-folders')) $('btn-folders').addEventListener('click', toggleSidebar);
+  $('sidebar-backdrop').addEventListener('click', closeSidebar);
+  initSidebarResize();
+
   $('menu-theme').addEventListener('change', function () {
-    sessionStorage.setItem('themeMode', this.value);
+    setCookie('themeMode', this.value);
     applyTheme(this.value);
   });
 
@@ -958,7 +1347,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   $('menu-logout').addEventListener('click', () => {
     clearAuthSession();
+    lastAuth = null;
     clipboard = null;
+    folderTree.clear();
+    closeSidebar();
     $('main').classList.add('hidden');
     $('auth-overlay').classList.remove('hidden');
     $('menu-dropdown').classList.add('hidden');

@@ -5,6 +5,34 @@ const errorCodeMap = {
   item_not_found: 'item_not_found',
 };
 
+let cookieLifetimeMin = 43200;
+
+function getCookie(name) {
+  const m = document.cookie.match(new RegExp('(?:^|; )' + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '=([^;]*)'));
+  let v = m ? decodeURIComponent(m[1]) : null;
+  if (v == null) {
+    const old = sessionStorage.getItem(name);
+    if (old != null) {
+      v = old;
+      setCookie(name, old);
+      sessionStorage.removeItem(name);
+    }
+  }
+  return v;
+}
+
+function setCookie(name, value, minutes) {
+  if (minutes == null) minutes = cookieLifetimeMin;
+  const d = new Date();
+  d.setTime(d.getTime() + minutes * 60e3);
+  const sec = location.protocol === 'https:' ? '; Secure' : '';
+  document.cookie = name + '=' + encodeURIComponent(value) + '; path=/; expires=' + d.toUTCString() + '; SameSite=Lax' + sec;
+}
+
+function removeCookie(name) {
+  document.cookie = name + '=; path=/; Max-Age=0; SameSite=Lax';
+}
+
 let _availableLangs = [];
 let _currentLang = null;
 let _loadPromise = null;
@@ -39,7 +67,7 @@ async function _loadI18n() {
 }
 
 function detectLang() {
-  const saved = sessionStorage.getItem('lang');
+  const saved = getCookie('lang');
   if (saved && _availableLangs.includes(saved)) return saved;
   for (const code of _availableLangs) {
     if (navigator.language && navigator.language.startsWith(code)) return code;
@@ -56,7 +84,7 @@ function getLang() {
 
 function setLang(lang) {
   _currentLang = lang;
-  sessionStorage.setItem('lang', lang);
+  setCookie('lang', lang);
 }
 
 function getAvailableLangs() {

@@ -32,6 +32,8 @@ FTP servers drop idle connections (~600s). Client sends `ping` via WebSocket eve
 - `rename(source, dest)` uses full paths. `move(source, dest)` appends source filename to dest dir.
 - `file_exists` carries `context: "upload"|"move"|"copy"` + `source` + `dest`.
 - `download_request` / `download_zip_request` → `{"type":"download_ready","token":"..."}`. Single-use token, consumed via `/api/download?token=`.
+- `list_items` → `list_items_ok {path, items}` (dirs + files, used by sidebar tree, not `list`).
+- `properties` → `props_ok {props}`; `props.path` = full path (server adds it; client shows under "Path:" label, click copies, Ctrl+click copies basename).
 - Error codes: `not_authenticated`, `no_active_upload`, `item_not_found`.
 
 ## Backend architecture
@@ -42,13 +44,13 @@ FTP servers drop idle connections (~600s). Client sends `ping` via WebSocket eve
 
 ## Config (`config/config.yaml`)
 Hand-parsed via `partition(":")` — no PyYAML. Bool/int auto-detected. Empty/missing file → login fields editable.
-Keys: `backend` (default `"ftp"`), `host`, `port`, `passive`, `title`, `use_headers` (false by default; enables `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy` on static responses).
+Keys: `backend` (default `"ftp"`), `host`, `port`, `passive`, `title`, `use_headers` (false by default; enables `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy` on static responses), `sessionLifetime` (minutes, optional; default 43200 = 30 days; drives cookie lifetime).
 
 ## Security notes
 - Path traversal in `/i18n/{name}` prevents `..`, `/`, `\`, `:` in filename + `realpath` boundary check.
 - XSS prevention: `esc()` in `static/app.js` (`&`, `<`, `>`, `"`, `'` → HTML entities) wraps all FTP-originated data in `innerHTML`.
 - Security headers (`nosniff`, `DENY`, `no-referrer`) only active when `use_headers: true` in config. Default off because `FileResponse` + `nosniff` on Windows may serve `.js` as `text/plain` (mimetypes misdetection).
-- FTP credentials stored in session memory + browser `sessionStorage`. No encryption.
+- FTP credentials stored in session memory + browser cookies. No encryption.
 
 ## Session management
 - `sessions: dict[str, dict]` (in-memory UUID keys). Fields: `backend`, `lock`, `gen`, `cancelled`, `upload_buf`, `upload_path`, `auth_params`, `sid`, `write_task`, `bg_task`.
@@ -60,8 +62,11 @@ Keys: `backend` (default `"ftp"`), `host`, `port`, `passive`, `title`, `use_head
 - **Select mode**: checkboxes via `Ctrl+A` / `Ctrl+click`. Copy/cut/delete/download auto-exit.
 - **Clipboard**: `{ paths: [...], cut: bool }`. Paste serial via `pasteNext()`.
 - **Op progress** in `#op-bar`: spinner + verb + filename + bar + %. Hides 500ms after `ok`.
-- **State in sessionStorage**: auth, sort, theme, lang.
-- **Cache-busting**: `app.js?v=4`, `lang.js?v=4` hardcoded in `index.html`.
+- **State in cookies** (`Path=/; SameSite=Lax; Secure` on https): auth, sort, theme, lang, sidebarWidth. Lifetime = `sessionLifetime` (minutes) from `/api/config`, default 43200 (30 days). Helpers `getCookie/setCookie/removeCookie` in `lang.js`; old `sessionStorage` values migrate on first read.
+- **Auth cookies written from `lastAuth`**, not form fields: `auth_ok` calls `saveAuthSession(lastAuth...)`. `lastAuth` set in `ws.onopen` (auto-login from cookies) and form submit. Never read form inputs there — after F5 they're empty and would overwrite valid cookies with `""` (causes "login form appears on reload" bug). `logout` clears `lastAuth`.
+- **Sidebar tree** (`#folder-sidebar`): lazy-load via `list_items`, `folderTree = Map<path, {loaded,loading,expanded,items}>`. Root = `basePath` (cwd from `auth_ok`), NOT `/`. Click folder = navigate + expand; chevron = toggle. Files render as leaf rows. Context menu on sidebar items uses `ctxBasePath` (parent dir); select/select_all hidden. Width persisted via `sidebarWidth` cookie, drag handle `#sidebar-resizer` (desktop only). Home (breadcrumb) icon → `navigate('/')` + `collapseFolderTree()`. Top-level placeholder `#empty-root` ("Choose folder") shows when `currentPath === basePath`; `navigateUp` boundary is `basePath`.
+- **Splash screen**: `#splash` (logo + spinner) shown on load until `ws.onopen`; prevents login-form flash. `auth-overlay` starts `hidden`.
+- **Cache-busting**: `app.js?v=9`, `lang.js?v=9` hardcoded in `index.html`.
 - `esc()` function for HTML-escaping user-controlled data in `innerHTML`.
 
 ## Tailwind / i18n / Docker

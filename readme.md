@@ -11,7 +11,8 @@ A web file manager that is essentially a wrapper over FTP. The idea is that a us
 - File properties
 - Dark/Light theme (auto/light/dark)
 - Multilingual (i18n), auto-language detection
-- SessionStorage — authorization, sorting, theme persist across F5
+- Cookies — authorization, sorting, theme persist across F5 and browser restarts
+- Configurable session lifetime
 - Mobile device support
 - Standalone or Docker deployment
 - Reverse-proxy support
@@ -57,6 +58,12 @@ docker run -d --restart unless-stopped --name ffm -p 8000:8000 -v ./config:/app/
 `config/config.yaml` — default FTP host/port/mode and application title setting.
 If the file is missing or the host, port, passive fields are empty — user input is expected.
 
+### Session lifetime
+
+Auth credentials and UI state (sorting, theme, language, sidebar width) are stored in browser cookies.
+Cookie lifetime is controlled by `sessionLifetime` (in minutes). If not set, the default is 43200 minutes (30 days).
+Cookies persist across page reloads and browser restarts; each successful login refreshes the lifetime.
+
 ### Example File
 
 ```yaml
@@ -65,6 +72,7 @@ host: "192.168.1.1" # Host to connect to
 port: 2121          # Custom FTP connection port
 passive: true       # Enable passive FTP mode
 title: "File Manager" # Custom application title
+sessionLifetime: 43200 # Cookie lifetime in minutes (default 43200 = 30 days)
 ```
 ## License
 

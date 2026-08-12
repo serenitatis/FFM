@@ -157,6 +157,11 @@ async def handle_msg(ws: WebSocket, data: dict, sess: dict):
                 items = await be.list_dir(path)
                 await ws.send_json({"type": "list_ok", "path": path, "items": [i.to_dict() for i in items]})
 
+            elif action == "list_items":
+                path = norm_path(params.get("path", ""))
+                items = await be.list_dir(path)
+                await ws.send_json({"type": "list_items_ok", "path": path, "items": [i.to_dict() for i in items]})
+
             elif action == "mkdir":
                 p = norm_path(params["path"])
                 await be.mkdir(p)
@@ -310,7 +315,9 @@ async def handle_msg(ws: WebSocket, data: dict, sess: dict):
                 name = p.rsplit("/", 1)[-1]
                 item = next((i for i in items if i.name == name), None)
                 if item:
-                    await ws.send_json({"type": "props_ok", "props": item.to_dict()})
+                    d = item.to_dict()
+                    d["path"] = p
+                    await ws.send_json({"type": "props_ok", "props": d})
                 else:
                     await ws.send_json({"type": "error", "code": "item_not_found", "msg": "Item not found"})
 
@@ -421,6 +428,7 @@ async def api_config():
         "port": cfg.get("port") or 0,
         "passive": cfg.get("passive") if "passive" in cfg else None,
         "title": cfg.get("title") or "",
+        "sessionLifetime": cfg.get("sessionLifetime") or 43200,
     }
 
 
