@@ -32,6 +32,8 @@
   "folder": "โฟลเดอร์",
   "file": "ไฟล์",
   "name_label": "ชื่อ:",
+  "path_label": "เส้นทาง:",
+  "copy_path": "คัดลอกเส้นทาง",
   "type_label": "ประเภท:",
   "size_label": "ขนาด:",
   "date_label": "วันที่:",
@@ -49,10 +51,12 @@
   "preparing_archive": "กำลังเตรียมไฟล์เก็บถาวร...",
   "language": "ไทย",
   "menu": "เมนู",
+  "folders": "โฟลเดอร์",
+  "choose_folder": "เลือกโฟลเดอร์เพื่อนำทาง",
   "select": "เลือก",
   "select_all": "เลือกทั้งหมด",
   "done": "เสร็จ",
   "rename": "เปลี่ยนชื่อ",
-  "cancel": "Cancel",
-  "uploading": "Uploading"
+  "cancel": "ยกเลิก",
+  "uploading": "กำลังอัปโหลด"
 }

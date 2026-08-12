@@ -32,6 +32,8 @@
   "folder": "Cartella",
   "file": "File",
   "name_label": "Nome:",
+  "path_label": "Percorso:",
+  "copy_path": "Copia percorso",
   "type_label": "Tipo:",
   "size_label": "Dimensione:",
   "date_label": "Data:",
@@ -49,10 +51,12 @@
   "preparing_archive": "Preparazione archivio...",
   "language": "IT",
   "menu": "Menù",
+  "folders": "Cartelle",
+  "choose_folder": "Scegli una cartella per navigare",
   "select": "Seleziona",
   "select_all": "Seleziona tutto",
   "done": "Fatto",
   "rename": "Rinomina",
-  "cancel": "Cancel",
-  "uploading": "Uploading"
+  "cancel": "Annulla",
+  "uploading": "Caricamento"
 }

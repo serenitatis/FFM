@@ -32,6 +32,8 @@
   "folder": "Folder",
   "file": "Plik",
   "name_label": "Nazwa:",
+  "path_label": "Ścieżka:",
+  "copy_path": "Kopiuj ścieżkę",
   "type_label": "Typ:",
   "size_label": "Rozmiar:",
   "date_label": "Data:",
@@ -49,10 +51,12 @@
   "preparing_archive": "Przygotowywanie archiwum...",
   "language": "PL",
   "menu": "Menu",
+  "folders": "Foldery",
+  "choose_folder": "Wybierz folder do nawigacji",
   "select": "Wybierz",
   "select_all": "Zaznacz wszystkie",
   "done": "Gotowe",
   "rename": "Zmień nazwę",
-  "cancel": "Cancel",
-  "uploading": "Uploading"
+  "cancel": "Anuluj",
+  "uploading": "Przesyłanie"
 }

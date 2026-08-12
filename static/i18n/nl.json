@@ -32,6 +32,8 @@
   "folder": "Map",
   "file": "Bestand",
   "name_label": "Naam:",
+  "path_label": "Pad:",
+  "copy_path": "Pad kopiëren",
   "type_label": "Type:",
   "size_label": "Grootte:",
   "date_label": "Datum:",
@@ -49,10 +51,12 @@
   "preparing_archive": "Archief voorbereiden...",
   "language": "NL",
   "menu": "Menu",
+  "folders": "Mappen",
+  "choose_folder": "Kies een map om te navigeren",
   "select": "Selecteren",
   "select_all": "Alles selecteren",
   "done": "Gereed",
   "rename": "Hernoemen",
-  "cancel": "Cancel",
-  "uploading": "Uploading"
+  "cancel": "Annuleren",
+  "uploading": "Uploaden"
 }

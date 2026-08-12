@@ -32,6 +32,8 @@
   "folder": "Thư mục",
   "file": "Tệp",
   "name_label": "Tên:",
+  "path_label": "Đường dẫn:",
+  "copy_path": "Sao chép đường dẫn",
   "type_label": "Loại:",
   "size_label": "Kích thước:",
   "date_label": "Ngày:",
@@ -49,10 +51,12 @@
   "preparing_archive": "Đang chuẩn bị tập tin nén...",
   "language": "Tiếng Việt",
   "menu": "Menu",
+  "folders": "Thư mục",
+  "choose_folder": "Chọn thư mục để điều hướng",
   "select": "Chọn",
   "select_all": "Chọn tất cả",
   "done": "Xong",
   "rename": "Đổi tên",
-  "cancel": "Cancel",
-  "uploading": "Uploading"
+  "cancel": "Hủy",
+  "uploading": "Đang tải lên"
 }

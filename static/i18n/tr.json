@@ -32,6 +32,8 @@
   "folder": "Klasör",
   "file": "Dosya",
   "name_label": "Ad:",
+  "path_label": "Yol:",
+  "copy_path": "Yolu kopyala",
   "type_label": "Tür:",
   "size_label": "Boyut:",
   "date_label": "Tarih:",
@@ -49,10 +51,12 @@
   "preparing_archive": "Arşiv hazırlanıyor...",
   "language": "Türkçe",
   "menu": "Menü",
+  "folders": "Klasörler",
+  "choose_folder": "Gezinmek için bir klasör seçin",
   "select": "Seç",
   "select_all": "Tümünü seç",
   "done": "Tamam",
   "rename": "Yeniden adlandır",
-  "cancel": "Cancel",
-  "uploading": "Uploading"
+  "cancel": "İptal",
+  "uploading": "Yükleniyor"
 }

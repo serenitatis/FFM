@@ -32,6 +32,8 @@
   "folder": "フォルダ",
   "file": "ファイル",
   "name_label": "名前：",
+  "path_label": "パス：",
+  "copy_path": "パスをコピー",
   "type_label": "種類：",
   "size_label": "サイズ：",
   "date_label": "日付：",
@@ -49,10 +51,12 @@
   "preparing_archive": "アーカイブを準備中...",
   "language": "日本語",
   "menu": "メニュー",
+  "folders": "フォルダ",
+  "choose_folder": "ナビゲートするフォルダを選択",
   "select": "選択",
   "select_all": "すべて選択",
   "done": "完了",
   "rename": "名前を変更",
-  "cancel": "Cancel",
-  "uploading": "Uploading"
+  "cancel": "キャンセル",
+  "uploading": "アップロード中"
 }

@@ -32,6 +32,8 @@
   "folder": "폴더",
   "file": "파일",
   "name_label": "이름:",
+  "path_label": "경로:",
+  "copy_path": "경로 복사",
   "type_label": "유형:",
   "size_label": "크기:",
   "date_label": "날짜:",
@@ -49,10 +51,12 @@
   "preparing_archive": "아카이브 준비 중...",
   "language": "한국어",
   "menu": "메뉴",
+  "folders": "폴더",
+  "choose_folder": "탐색할 폴더 선택",
   "select": "선택",
   "select_all": "모두 선택",
   "done": "완료",
   "rename": "이름 바꾸기",
-  "cancel": "Cancel",
-  "uploading": "Uploading"
+  "cancel": "취소",
+  "uploading": "업로드 중"
 }

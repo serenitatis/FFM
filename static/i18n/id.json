@@ -32,6 +32,8 @@
   "folder": "Folder",
   "file": "Berkas",
   "name_label": "Nama:",
+  "path_label": "Jalur:",
+  "copy_path": "Salin jalur",
   "type_label": "Jenis:",
   "size_label": "Ukuran:",
   "date_label": "Tanggal:",
@@ -49,10 +51,12 @@
   "preparing_archive": "Menyiapkan arsip...",
   "language": "Bahasa Indonesia",
   "menu": "Menu",
+  "folders": "Folder",
+  "choose_folder": "Pilih folder untuk navigasi",
   "select": "Pilih",
   "select_all": "Pilih semua",
   "done": "Selesai",
   "rename": "Ganti nama",
-  "cancel": "Cancel",
-  "uploading": "Uploading"
+  "cancel": "Batal",
+  "uploading": "Mengunggah"
 }

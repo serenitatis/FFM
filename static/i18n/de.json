@@ -32,6 +32,8 @@
   "folder": "Ordner",
   "file": "Datei",
   "name_label": "Name:",
+  "path_label": "Pfad:",
+  "copy_path": "Pfad kopieren",
   "type_label": "Typ:",
   "size_label": "Größe:",
   "date_label": "Datum:",
@@ -49,10 +51,12 @@
   "preparing_archive": "Archiv wird erstellt...",
   "language": "DE",
   "menu": "Menü",
+  "folders": "Ordner",
+  "choose_folder": "Wählen Sie einen Ordner zum Navigieren",
   "select": "Auswählen",
   "select_all": "Alle auswählen",
   "done": "Fertig",
   "rename": "Umbenennen",
-  "cancel": "Cancel",
-  "uploading": "Uploading"
+  "cancel": "Abbrechen",
+  "uploading": "Hochladen"
 }

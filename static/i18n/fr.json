@@ -32,6 +32,8 @@
   "folder": "Dossier",
   "file": "Fichier",
   "name_label": "Nom :",
+  "path_label": "Chemin :",
+  "copy_path": "Copier le chemin",
   "type_label": "Type :",
   "size_label": "Taille :",
   "date_label": "Date :",
@@ -49,10 +51,12 @@
   "preparing_archive": "Préparation de l'archive...",
   "language": "FR",
   "menu": "Menu",
+  "folders": "Dossiers",
+  "choose_folder": "Choisissez un dossier pour naviguer",
   "select": "Sélectionner",
   "select_all": "Tout sélectionner",
   "done": "Terminé",
   "rename": "Renommer",
-  "cancel": "Cancel",
-  "uploading": "Uploading"
+  "cancel": "Annuler",
+  "uploading": "Envoi en cours"
 }

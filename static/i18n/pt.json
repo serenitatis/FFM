@@ -32,6 +32,8 @@
   "folder": "Pasta",
   "file": "Arquivo",
   "name_label": "Nome:",
+  "path_label": "Caminho:",
+  "copy_path": "Copiar caminho",
   "type_label": "Tipo:",
   "size_label": "Tamanho:",
   "date_label": "Data:",
@@ -49,10 +51,12 @@
   "preparing_archive": "Preparando arquivo...",
   "language": "PT",
   "menu": "Menu",
+  "folders": "Pastas",
+  "choose_folder": "Escolha uma pasta para navegar",
   "select": "Selecionar",
   "select_all": "Selecionar tudo",
   "done": "Concluído",
   "rename": "Renomear",
-  "cancel": "Cancel",
-  "uploading": "Uploading"
+  "cancel": "Cancelar",
+  "uploading": "Enviando"
 }

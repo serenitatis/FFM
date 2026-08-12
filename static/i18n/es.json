@@ -32,6 +32,8 @@
   "folder": "Carpeta",
   "file": "Archivo",
   "name_label": "Nombre:",
+  "path_label": "Ruta:",
+  "copy_path": "Copiar ruta",
   "type_label": "Tipo:",
   "size_label": "Tamaño:",
   "date_label": "Fecha:",
@@ -49,10 +51,12 @@
   "preparing_archive": "Preparando archivo...",
   "language": "ES",
   "menu": "Menú",
+  "folders": "Carpetas",
+  "choose_folder": "Elija una carpeta para navegar",
   "select": "Seleccionar",
   "select_all": "Seleccionar todo",
   "done": "Hecho",
   "rename": "Renombrar",
-  "cancel": "Cancel",
-  "uploading": "Uploading"
+  "cancel": "Cancelar",
+  "uploading": "Subiendo"
 }

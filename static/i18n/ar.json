@@ -32,6 +32,8 @@
   "folder": "مجلد",
   "file": "ملف",
   "name_label": "الاسم:",
+  "path_label": "المسار:",
+  "copy_path": "نسخ المسار",
   "type_label": "النوع:",
   "size_label": "الحجم:",
   "date_label": "التاريخ:",
@@ -49,10 +51,12 @@
   "preparing_archive": "تحضير الأرشيف...",
   "language": "العربية",
   "menu": "القائمة",
+  "folders": "المجلدات",
+  "choose_folder": "اختر مجلدًا للتنقل",
   "select": "تحديد",
   "select_all": "تحديد الكل",
   "done": "تم",
   "rename": "إعادة تسمية",
-  "cancel": "Cancel",
-  "uploading": "Uploading"
+  "cancel": "إلغاء",
+  "uploading": "جارٍ الرفع"
 }
