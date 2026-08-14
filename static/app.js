@@ -1,4 +1,4 @@
-const APP_VERSION = '0.65.0'; // do not auto increment!
+const APP_VERSION = '0.68.0'; // do not auto increment!
 const isTouchDevice = window.matchMedia('(pointer: coarse)').matches;
 let ws = null;
 let currentPath = '/';
