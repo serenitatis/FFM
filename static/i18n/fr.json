@@ -58,5 +58,8 @@
   "done": "Terminé",
   "rename": "Renommer",
   "cancel": "Annuler",
-  "uploading": "Envoi en cours"
+  "uploading": "Envoi en cours",
+  "checksum_label": "{0}:",
+  "copy_checksum": "Copier la somme de contrôle",
+  "checksum_refresh": "Calculer la somme de contrôle"
 }

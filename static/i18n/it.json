@@ -58,5 +58,8 @@
   "done": "Fatto",
   "rename": "Rinomina",
   "cancel": "Annulla",
-  "uploading": "Caricamento"
+  "uploading": "Caricamento",
+  "checksum_label": "{0}:",
+  "copy_checksum": "Copia checksum",
+  "checksum_refresh": "Calcola checksum"
 }

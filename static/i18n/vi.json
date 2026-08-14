@@ -58,5 +58,8 @@
   "done": "Xong",
   "rename": "Đổi tên",
   "cancel": "Hủy",
-  "uploading": "Đang tải lên"
+  "uploading": "Đang tải lên",
+  "checksum_label": "{0}:",
+  "copy_checksum": "Sao chép checksum",
+  "checksum_refresh": "Tính checksum"
 }

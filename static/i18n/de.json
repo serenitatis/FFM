@@ -58,5 +58,8 @@
   "done": "Fertig",
   "rename": "Umbenennen",
   "cancel": "Abbrechen",
-  "uploading": "Hochladen"
+  "uploading": "Hochladen",
+  "checksum_label": "{0}:",
+  "copy_checksum": "Prüfsumme kopieren",
+  "checksum_refresh": "Prüfsumme berechnen"
 }

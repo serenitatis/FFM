@@ -58,5 +58,8 @@
   "done": "Gotowe",
   "rename": "Zmień nazwę",
   "cancel": "Anuluj",
-  "uploading": "Przesyłanie"
+  "uploading": "Przesyłanie",
+  "checksum_label": "{0}:",
+  "copy_checksum": "Skopiuj sumę kontrolną",
+  "checksum_refresh": "Oblicz sumę kontrolną"
 }

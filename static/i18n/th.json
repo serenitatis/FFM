@@ -58,5 +58,8 @@
   "done": "เสร็จ",
   "rename": "เปลี่ยนชื่อ",
   "cancel": "ยกเลิก",
-  "uploading": "กำลังอัปโหลด"
+  "uploading": "กำลังอัปโหลด",
+  "checksum_label": "{0}:",
+  "copy_checksum": "คัดลอก checksum",
+  "checksum_refresh": "คำนวณ checksum"
 }

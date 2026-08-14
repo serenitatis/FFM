@@ -58,5 +58,8 @@
   "done": "完成",
   "rename": "重命名",
   "cancel": "取消",
-  "uploading": "正在上传"
+  "uploading": "正在上传",
+  "checksum_label": "{0}:",
+  "copy_checksum": "复制校验和",
+  "checksum_refresh": "计算校验和"
 }

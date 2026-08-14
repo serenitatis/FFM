@@ -58,5 +58,8 @@
   "done": "تم",
   "rename": "إعادة تسمية",
   "cancel": "إلغاء",
-  "uploading": "جارٍ الرفع"
+  "uploading": "جارٍ الرفع",
+  "checksum_label": "{0}:",
+  "copy_checksum": "نسخ المجموع الاختباري",
+  "checksum_refresh": "حساب المجموع الاختباري"
 }

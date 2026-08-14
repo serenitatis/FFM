@@ -58,5 +58,8 @@
   "done": "Concluído",
   "rename": "Renomear",
   "cancel": "Cancelar",
-  "uploading": "Enviando"
+  "uploading": "Enviando",
+  "checksum_label": "{0}:",
+  "copy_checksum": "Copiar soma de verificação",
+  "checksum_refresh": "Calcular soma de verificação"
 }

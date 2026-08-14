@@ -58,5 +58,8 @@
   "done": "完了",
   "rename": "名前を変更",
   "cancel": "キャンセル",
-  "uploading": "アップロード中"
+  "uploading": "アップロード中",
+  "checksum_label": "{0}:",
+  "copy_checksum": "チェックサムをコピー",
+  "checksum_refresh": "チェックサムを計算"
 }

@@ -58,5 +58,8 @@
   "done": "Gereed",
   "rename": "Hernoemen",
   "cancel": "Annuleren",
-  "uploading": "Uploaden"
+  "uploading": "Uploaden",
+  "checksum_label": "{0}:",
+  "copy_checksum": "Controlesom kopiëren",
+  "checksum_refresh": "Controlesom berekenen"
 }

@@ -58,5 +58,8 @@
   "done": "Tamam",
   "rename": "Yeniden adlandır",
   "cancel": "İptal",
-  "uploading": "Yükleniyor"
+  "uploading": "Yükleniyor",
+  "checksum_label": "{0}:",
+  "copy_checksum": "Sağlama toplamını kopyala",
+  "checksum_refresh": "Sağlama toplamını hesapla"
 }

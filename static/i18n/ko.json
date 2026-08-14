@@ -58,5 +58,8 @@
   "done": "완료",
   "rename": "이름 바꾸기",
   "cancel": "취소",
-  "uploading": "업로드 중"
+  "uploading": "업로드 중",
+  "checksum_label": "{0}:",
+  "copy_checksum": "체크섬 복사",
+  "checksum_refresh": "체크섬 계산"
 }

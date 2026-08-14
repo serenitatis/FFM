@@ -58,5 +58,8 @@
   "done": "Selesai",
   "rename": "Ganti nama",
   "cancel": "Batal",
-  "uploading": "Mengunggah"
+  "uploading": "Mengunggah",
+  "checksum_label": "{0}:",
+  "copy_checksum": "Salin checksum",
+  "checksum_refresh": "Hitung checksum"
 }
