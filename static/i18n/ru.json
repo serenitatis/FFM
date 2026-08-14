@@ -58,5 +58,8 @@
   "done": "Готово",
   "rename": "Переименовать",
   "cancel": "Отмена",
-  "uploading": "Загрузка"
+  "uploading": "Загрузка",
+  "checksum_label": "{0}:",
+  "copy_checksum": "Скопировать контрольную сумму",
+  "checksum_refresh": "Вычислить контрольную сумму"
 }

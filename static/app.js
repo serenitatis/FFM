@@ -50,6 +50,9 @@ function connect() {
     $('auth-overlay').classList.remove('hidden');
     $('auth-error').textContent = __('connection_lost');
     $('auth-error').classList.remove('hidden');
+    for (const [p, e] of checksumCache) {
+      if (e && e.pending) checksumCache.set(p, {});
+    }
     if (pingInterval) { clearInterval(pingInterval); pingInterval = null; }
     setTimeout(connect, 2000);
   };
@@ -160,6 +163,15 @@ function handleMsg(msg) {
       showProperties(msg.props);
       break;
 
+    case 'checksum_ok':
+      checksumCache.set(msg.path, { algo: msg.algo, hash: msg.hash });
+      pendingChecksumPath = null;
+      if (currentPropsPath === msg.path) {
+        const row = $('props-checksum-row');
+        if (row) row.outerHTML = renderChecksumRow(msg.path);
+      }
+      break;
+
     case 'download_ready': {
       if (msg.zip) {
         fetch(`/api/download?token=${msg.token}`)
@@ -194,6 +206,16 @@ function handleMsg(msg) {
 
     case 'error':
       hideOpBar();
+      if (msg.code === 'checksum_failed' && msg.path) {
+        const entry = checksumCache.get(msg.path);
+        if (entry && entry.pending) {
+          checksumCache.set(msg.path, {});
+          if (currentPropsPath === msg.path) {
+            const row = $('props-checksum-row');
+            if (row) row.outerHTML = renderChecksumRow(msg.path);
+          }
+        }
+      }
       const errMsg = msg.code && errorCodeMap[msg.code] ? __(msg.code) : msg.msg;
       alert(__('error_prefix') + errMsg);
       break;
@@ -771,6 +793,8 @@ function initSidebarResize() {
 let opTimer = null;
 let _pasteQueue = null;
 let currentOpVerb = '';
+const checksumCache = new Map();
+let currentPropsPath = null;
 
 function showOpBar(html) {
   $('op-bar-content').innerHTML = html;
@@ -1199,9 +1223,13 @@ function fallbackCopy(text) {
   const ta = document.createElement('textarea');
   ta.value = text;
   ta.style.position = 'fixed';
+  ta.style.top = '0';
+  ta.style.left = '0';
   ta.style.opacity = '0';
   document.body.appendChild(ta);
+  ta.focus();
   ta.select();
+  ta.setSelectionRange(0, text.length);
   let ok = false;
   try { ok = document.execCommand('copy'); } catch (_) {}
   document.body.removeChild(ta);
@@ -1212,7 +1240,37 @@ function flashPathCopied() {
   const icon = $('props-path-icon');
   if (!icon) return;
   icon.className = 'fas fa-check text-blue-600 dark:text-blue-400';
-  setTimeout(() => { icon.className = 'fas fa-copy text-gray-400 dark:text-slate-500'; }, 1500);
+  setTimeout(() => { icon.className = 'fas fa-copy text-gray-400 dark:text-slate-500 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400'; }, 1500);
+}
+
+function flashChecksumCopied() {
+  const icon = $('props-checksum-icon');
+  if (!icon) return;
+  icon.className = 'fas fa-check text-blue-600 dark:text-blue-400';
+  setTimeout(() => { icon.className = 'fas fa-copy text-gray-400 dark:text-slate-500 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400'; }, 1500);
+}
+
+function renderChecksumRow(path) {
+  const entry = checksumCache.get(path);
+  if (entry && entry.hash) {
+    return `<p id="props-checksum-row"><i class="fas fa-hashtag"></i> <strong>${__('checksum_label', entry.algo)}</strong> ` +
+      `<span id="props-checksum" class="cursor-pointer select-all props-path">${esc(entry.hash)}</span> ` +
+      `<i id="props-checksum-icon" class="fas fa-copy text-gray-400 dark:text-slate-500 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400" title="${__('copy_checksum')}"></i></p>`;
+  }
+  if (entry && entry.pending) {
+    return `<p id="props-checksum-row"><i class="fas fa-hashtag"></i> <strong>${__('checksum_label', 'MD5')}</strong> ` +
+      `<i class="fas fa-spinner op-spinner"></i></p>`;
+  }
+  return `<p id="props-checksum-row"><i class="fas fa-hashtag"></i> <strong>${__('checksum_label', 'MD5')}</strong> ` +
+    `<i id="props-checksum-btn" class="fas fa-sync-alt text-gray-400 dark:text-slate-500 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400" title="${__('checksum_refresh')}"></i></p>`;
+}
+
+function startChecksum(path) {
+  if (checksumCache.get(path) && checksumCache.get(path).pending) return;
+  checksumCache.set(path, { pending: true });
+  const row = $('props-checksum-row');
+  if (row) row.outerHTML = renderChecksumRow(path);
+  send('checksum', { path });
 }
 
 function showProperties(props) {
@@ -1221,13 +1279,15 @@ function showProperties(props) {
     : '<i class="far fa-file"></i>';
   const typeLabel = props.type === 'dir' ? __('folder') : __('file');
   const fullPath = props.path || props.name;
+  currentPropsPath = props.path || props.name;
   $('props-body').innerHTML =
     `<p>${icon} <strong>${__('path_label')}</strong> ` +
     `<span id="props-path" class="cursor-pointer select-all props-path">${esc(fullPath)}</span> ` +
     `<i id="props-path-icon" class="fas fa-copy text-gray-400 dark:text-slate-500 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400" title="${__('copy_path')}"></i></p>` +
     `<p><i class="fas fa-tag"></i> <strong>${__('type_label')}</strong> ${esc(typeLabel)}</p>` +
     `<p><i class="fas fa-weight-hanging"></i> <strong>${__('size_label')}</strong> ${props.type === 'dir' ? '—' : fmtSize(props.size)}</p>` +
-    `<p><i class="far fa-calendar-alt"></i> <strong>${__('date_label')}</strong> ${esc(fmtDate(props.date))}</p>`;
+    `<p><i class="far fa-calendar-alt"></i> <strong>${__('date_label')}</strong> ${esc(fmtDate(props.date))}</p>` +
+    (props.type === 'dir' ? '' : renderChecksumRow(fullPath));
   const pathEl = $('props-path');
   if (pathEl) {
     pathEl.addEventListener('click', e => {
@@ -1454,6 +1514,18 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   $('props-close').addEventListener('click', () => {
     $('props-overlay').classList.add('hidden');
+    currentPropsPath = null;
+  });
+
+  $('props-body').addEventListener('click', e => {
+    if (e.target.closest('#props-checksum-btn')) {
+      startChecksum(currentPropsPath);
+      return;
+    }
+    if (e.target.closest('#props-checksum') || e.target.closest('#props-checksum-icon')) {
+      const entry = checksumCache.get(currentPropsPath);
+      copyToClipboard(entry ? entry.hash : '').then(flashChecksumCopied);
+    }
   });
 
   document.addEventListener('click', e => {

@@ -27,6 +27,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sessions: dict[str, dict] = {}
 download_tokens: OrderedDict = OrderedDict()
 DOWNLOAD_TOKEN_TTL = 600
+CHECKSUM_ALGO = "md5"
 
 
 def load_config():
@@ -297,6 +298,30 @@ async def handle_msg(ws: WebSocket, data: dict, sess: dict):
 
                 sess["bg_task"] = asyncio.create_task(_do_copy())
 
+            elif action == "checksum":
+                p = norm_path(params["path"])
+                parent = p.rsplit("/", 1)[0] if "/" in p else "/"
+                name = p.rsplit("/", 1)[-1]
+                items = await be.list_dir(parent)
+                item = next((i for i in items if i.name == name), None)
+                if not item or item.type != "file":
+                    await ws.send_json({"type": "error", "msg": "Checksum available for files only"})
+                    return
+                gen = sess["gen"]
+
+                async def _do_checksum():
+                    try:
+                        h = await be.checksum(p, CHECKSUM_ALGO)
+                        if sess.get("gen") == gen and not sess.get("cancelled"):
+                            await ws.send_json({"type": "checksum_ok", "path": p, "algo": CHECKSUM_ALGO, "hash": h})
+                    except Exception:
+                        if sess.get("gen") == gen and not sess.get("cancelled"):
+                            await ws.send_json({"type": "error", "code": "checksum_failed", "msg": "Checksum failed", "path": p})
+                    finally:
+                        sess.pop("bg_task", None)
+
+                sess["bg_task"] = asyncio.create_task(_do_checksum())
+
             elif action == "upload_start":
                 sess["cancelled"] = False
                 p = norm_path(params["path"])
@@ -381,9 +406,13 @@ async def handle_msg(ws: WebSocket, data: dict, sess: dict):
                 await ws.send_json({"type": "error", "msg": f"Unknown action: {action}"})
 
         except BackendError as e:
+            if not getattr(be, "is_connected", lambda: True)():
+                sess["backend"] = None
             if not sess.get("cancelled"):
                 await ws.send_json({"type": "error", "msg": str(e)})
         except Exception as e:
+            if not getattr(be, "is_connected", lambda: True)():
+                sess["backend"] = None
             if not sess.get("cancelled"):
                 await ws.send_json({"type": "error", "msg": str(e)})
 

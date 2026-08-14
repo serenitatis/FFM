@@ -58,5 +58,8 @@
   "done": "Done",
   "rename": "Rename",
   "cancel": "Cancel",
-  "uploading": "Uploading"
+  "uploading": "Uploading",
+  "checksum_label": "{0}:",
+  "copy_checksum": "Copy checksum",
+  "checksum_refresh": "Compute checksum"
 }

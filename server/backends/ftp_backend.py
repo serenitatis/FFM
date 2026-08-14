@@ -1,7 +1,7 @@
 import asyncio
 import socket
 from io import BytesIO
-from ftplib import FTP, error_perm
+from ftplib import FTP, error_perm, error_temp
 
 from typing import Optional
 from .base import FileBackend, FileItem, BackendError, ProgressCB
@@ -89,14 +89,43 @@ class FTPBackend(FileBackend):
     def __init__(self):
         self._ftp: FTP | None = None
         self._cancelled = False
+        self._lock = asyncio.Lock()
 
-    async def noop(self) -> None:
+    @staticmethod
+    def _teardown_ftp(ftp: FTP) -> None:
+        for s in (ftp.sock, ftp.file):
+            if s:
+                try:
+                    if s is ftp.sock:
+                        s.shutdown(socket.SHUT_RDWR)
+                except Exception:
+                    pass
+                try:
+                    s.close()
+                except Exception:
+                    pass
+
+    async def _abort(self) -> None:
         ftp = self._ftp
-        if ftp and not self._cancelled:
+        self._ftp = None
+        if ftp:
+            self._teardown_ftp(ftp)
             try:
-                await asyncio.to_thread(ftp.voidcmd, "NOOP")
+                await asyncio.to_thread(ftp.close)
             except Exception:
                 pass
+
+    def is_connected(self) -> bool:
+        return self._ftp is not None
+
+    async def noop(self) -> None:
+        async with self._lock:
+            ftp = self._ftp
+            if ftp and not self._cancelled:
+                try:
+                    await asyncio.to_thread(ftp.voidcmd, "NOOP")
+                except Exception:
+                    pass
 
     async def cancel(self) -> None:
         self._cancelled = True
@@ -104,16 +133,7 @@ class FTPBackend(FileBackend):
         if not ftp:
             return
         self._ftp = None
-        for s in (ftp.sockobj, ftp.sock):
-            if s:
-                try:
-                    s.shutdown(socket.SHUT_RDWR)
-                except Exception:
-                    pass
-                try:
-                    s.close()
-                except Exception:
-                    pass
+        self._teardown_ftp(ftp)
         await asyncio.to_thread(ftp.close)
 
     async def connect(self, params: dict) -> str:
@@ -136,46 +156,42 @@ class FTPBackend(FileBackend):
         if not ftp:
             return
         self._ftp = None
-        for s in (ftp.sockobj, ftp.sock):
-            if s:
-                try:
-                    s.shutdown(socket.SHUT_RDWR)
-                except Exception:
-                    pass
-                try:
-                    s.close()
-                except Exception:
-                    pass
+        self._teardown_ftp(ftp)
         await asyncio.to_thread(ftp.close)
 
     async def getcwd(self) -> str:
         return await asyncio.to_thread(self._ftp.pwd)
 
     async def list_dir(self, path: str) -> list[FileItem]:
-        raw = await asyncio.to_thread(_list_dir_ftp, self._ftp, path)
+        async with self._lock:
+            raw = await asyncio.to_thread(_list_dir_ftp, self._ftp, path)
         return [FileItem(name=r["name"], type=r["type"], size=r["size"], date=r["date"]) for r in raw]
 
     async def mkdir(self, path: str) -> None:
         try:
-            await asyncio.to_thread(self._ftp.mkd, path)
+            async with self._lock:
+                await asyncio.to_thread(self._ftp.mkd, path)
         except error_perm as e:
             raise BackendError(str(e)) from e
 
     async def delete(self, path: str) -> None:
         try:
-            await asyncio.to_thread(self._ftp.delete, path)
+            async with self._lock:
+                await asyncio.to_thread(self._ftp.delete, path)
         except error_perm as e:
             raise BackendError(str(e)) from e
 
     async def delete_dir(self, path: str) -> None:
         try:
-            await asyncio.to_thread(self._ftp.rmd, path)
+            async with self._lock:
+                await asyncio.to_thread(self._ftp.rmd, path)
         except error_perm as e:
             raise BackendError(str(e)) from e
 
     async def rename(self, src: str, dst: str) -> None:
         try:
-            await asyncio.to_thread(self._ftp.rename, src, dst)
+            async with self._lock:
+                await asyncio.to_thread(self._ftp.rename, src, dst)
         except error_perm as e:
             parent = src.rsplit("/", 1)[0] if "/" in src else "/"
             name = src.rsplit("/", 1)[-1]
@@ -194,31 +210,36 @@ class FTPBackend(FileBackend):
     async def read_bytes(self, path: str, progress_cb: Optional[ProgressCB] = None, total_size: int = 0) -> BytesIO:
         buf = BytesIO()
         try:
-            if progress_cb:
-                total = total_size
-                if not total:
-                    try:
-                        total = await asyncio.to_thread(lambda: self._ftp.size(path))
-                    except Exception:
-                        pass
-                if total:
-                    loop = asyncio.get_running_loop()
-                    name = path.rsplit("/", 1)[-1]
-                    br = [0]
-                    lr = [0]
+            async with self._lock:
+                await asyncio.to_thread(self._ftp.sendcmd, "TYPE I")
+                if progress_cb:
+                    total = total_size
+                    if not total:
+                        try:
+                            total = await asyncio.to_thread(lambda: self._ftp.size(path))
+                        except Exception:
+                            pass
+                    if total:
+                        loop = asyncio.get_running_loop()
+                        name = path.rsplit("/", 1)[-1]
+                        br = [0]
+                        lr = [0]
 
-                    def _cb(data):
-                        buf.write(data)
-                        br[0] += len(data)
-                        if br[0] - lr[0] >= 2097152 or br[0] == total:
-                            lr[0] = br[0]
-                            asyncio.run_coroutine_threadsafe(progress_cb(br[0], total, name), loop)
+                        def _cb(data):
+                            buf.write(data)
+                            br[0] += len(data)
+                            if br[0] - lr[0] >= 2097152 or br[0] == total:
+                                lr[0] = br[0]
+                                asyncio.run_coroutine_threadsafe(progress_cb(br[0], total, name), loop)
 
-                    await asyncio.to_thread(lambda: self._ftp.retrbinary(f"RETR {path}", _cb))
+                        await asyncio.to_thread(lambda: self._ftp.retrbinary(f"RETR {path}", _cb))
+                    else:
+                        await asyncio.to_thread(lambda: self._ftp.retrbinary(f"RETR {path}", buf.write))
                 else:
                     await asyncio.to_thread(lambda: self._ftp.retrbinary(f"RETR {path}", buf.write))
-            else:
-                await asyncio.to_thread(lambda: self._ftp.retrbinary(f"RETR {path}", buf.write))
+        except error_temp as e:
+            await self._abort()
+            raise BackendError(str(e)) from e
         except error_perm as e:
             raise BackendError(str(e)) from e
         buf.seek(0)
@@ -226,64 +247,84 @@ class FTPBackend(FileBackend):
 
     async def size(self, path: str) -> int:
         try:
-            return await asyncio.to_thread(self._ftp.size, path)
+            async with self._lock:
+                return await asyncio.to_thread(self._ftp.size, path)
         except Exception:
             raise BackendError(f"size failed: {path}")
 
     async def stream_bytes(self, path: str, chunk_size: int = 65536):
-        conn = None
-        try:
-            conn = await asyncio.to_thread(self._ftp.transfercmd, f"RETR {path}")
-            while True:
-                chunk = await asyncio.to_thread(conn.recv, chunk_size)
-                if not chunk:
-                    break
-                yield chunk
-        except error_perm as e:
-            raise BackendError(str(e)) from e
-        finally:
-            if conn is not None:
-                try:
-                    conn.close()
-                except Exception:
-                    pass
-                try:
-                    await asyncio.to_thread(self._ftp.voidresp)
-                except Exception:
-                    pass
+        async with self._lock:
+            conn = None
+            try:
+                await asyncio.to_thread(self._ftp.sendcmd, "TYPE I")
+                conn = await asyncio.to_thread(self._ftp.transfercmd, f"RETR {path}")
+                while True:
+                    chunk = await asyncio.to_thread(conn.recv, chunk_size)
+                    if not chunk:
+                        break
+                    yield chunk
+            except error_temp as e:
+                await self._abort()
+                raise BackendError(str(e)) from e
+            except error_perm as e:
+                raise BackendError(str(e)) from e
+            except OSError as e:
+                raise BackendError(str(e)) from e
+            finally:
+                if conn is not None:
+                    try:
+                        conn.close()
+                    except Exception:
+                        pass
+                    try:
+                        resp = await asyncio.to_thread(self._ftp.voidresp)
+                    except Exception:
+                        pass
+                    else:
+                        if resp and not resp.startswith(("2", "1")):
+                            raise BackendError(f"Transfer failed: {resp}")
+
+    async def checksum(self, path: str, algo: str = "md5") -> str:
+        return await super().checksum(path, algo)
 
     async def write_bytes(self, path: str, buf: BytesIO, progress_cb: Optional[ProgressCB] = None, total_size: int = 0) -> None:
         buf.seek(0)
         try:
-            if progress_cb:
-                total = total_size
-                if not total:
-                    buf.seek(0, 2)
-                    total = buf.tell()
-                    buf.seek(0)
-                if total:
-                    loop = asyncio.get_running_loop()
-                    name = path.rsplit("/", 1)[-1]
-                    bw = [0]
-                    lr = [0]
+            async with self._lock:
+                await asyncio.to_thread(self._ftp.sendcmd, "TYPE I")
+                if progress_cb:
+                    total = total_size
+                    if not total:
+                        buf.seek(0, 2)
+                        total = buf.tell()
+                        buf.seek(0)
+                    if total:
+                        loop = asyncio.get_running_loop()
+                        name = path.rsplit("/", 1)[-1]
+                        bw = [0]
+                        lr = [0]
 
-                    def _cb(data):
-                        bw[0] += len(data)
-                        if bw[0] - lr[0] >= 2097152 or bw[0] == total:
-                            lr[0] = bw[0]
-                            asyncio.run_coroutine_threadsafe(progress_cb(bw[0], total, name), loop)
+                        def _cb(data):
+                            bw[0] += len(data)
+                            if bw[0] - lr[0] >= 2097152 or bw[0] == total:
+                                lr[0] = bw[0]
+                                asyncio.run_coroutine_threadsafe(progress_cb(bw[0], total, name), loop)
 
-                    await asyncio.to_thread(lambda: self._ftp.storbinary(f"STOR {path}", buf, callback=_cb))
+                        await asyncio.to_thread(lambda: self._ftp.storbinary(f"STOR {path}", buf, callback=_cb))
+                    else:
+                        await asyncio.to_thread(lambda: self._ftp.storbinary(f"STOR {path}", buf))
                 else:
                     await asyncio.to_thread(lambda: self._ftp.storbinary(f"STOR {path}", buf))
-            else:
-                await asyncio.to_thread(lambda: self._ftp.storbinary(f"STOR {path}", buf))
+        except error_temp as e:
+            await self._abort()
+            raise BackendError(str(e)) from e
         except error_perm as e:
             raise BackendError(str(e)) from e
 
     async def exists(self, path: str) -> bool:
         try:
-            await asyncio.to_thread(self._ftp.size, path)
+            async with self._lock:
+                await asyncio.to_thread(self._ftp.size, path)
             return True
         except error_perm:
             pass

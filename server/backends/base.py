@@ -1,3 +1,4 @@
+import hashlib
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, asdict
 from io import BytesIO
@@ -66,6 +67,9 @@ class FileBackend(ABC):
 
     async def noop(self) -> None:
         pass
+
+    def is_connected(self) -> bool:
+        return True
 
     async def cancel(self) -> None:
         """Abort any in-progress transfer. Override for protocol-specific abort."""
@@ -165,6 +169,16 @@ class FileBackend(ABC):
             if not chunk:
                 break
             yield chunk
+
+    async def checksum(self, path: str, algo: str = "md5") -> str:
+        """Compute file hash by streaming. Backend-agnostic; override for native fast path."""
+        try:
+            h = hashlib.new(algo)
+        except ValueError:
+            raise BackendError(f"Unsupported hash: {algo}") from None
+        async for chunk in self.stream_bytes(path):
+            h.update(chunk)
+        return h.hexdigest()
 
     @abstractmethod
     async def write_bytes(self, path: str, buf: BytesIO, progress_cb: Optional[ProgressCB] = None, total_size: int = 0) -> None:
