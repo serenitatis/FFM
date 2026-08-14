@@ -1,0 +1,24 @@
+# FFM configuration example.
+# Copy to config.yaml and uncomment/edit values.
+# Hand-parsed via partition(":") — no YAML library. Bool/int auto-detected.
+
+# Backend plugin name (see server/backends/__init__.py).
+# backend: ftp
+
+# FTP server (leave empty to show login fields).
+# host: ""
+# port: 21
+# passive: true
+
+# App title.
+# title: "FFM - Fast File Manager"
+
+# Security headers on static responses (X-Content-Type-Options, X-Frame-Options, Referrer-Policy).
+# use_headers: false
+
+# Session lifetime in minutes (drives cookie lifetime). Default 180.
+# sessionLifetime: 180
+
+# AES key for the auth token cookie (hex, 64 chars). Falls back to env FFM_COOKIE_KEY.
+# If neither is set — no persistent session, login form on every reload.
+# cookieKey: ""
