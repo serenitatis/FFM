@@ -19,7 +19,7 @@ Copy/move/rmdir run in `asyncio.create_task` (bg_task) so the message loop stays
 
 Cancel increments `sess["gen"]`. bg_tasks capture `gen` at creation and check `sess.get("gen") == gen` before any WS message. Stale tasks fall silent. `FTPBackend.cancel()` shuts down + closes sockets + `ftp.close()`. `sess["backend"]` set to `None`; next request auto-reconnects from saved `auth_params`.
 
-**Never run two FTP operations concurrently on the same backend** — ftplib is not thread-safe.
+**Never run two FTP operations concurrently on the same backend** — ftplib is not thread-safe. `FTPBackend` serializes every command through an internal `asyncio.Lock` (held across `stream_bytes` transfers; released on generator close). Without it, concurrent handler/bg_task/NOOP commands share the control channel → `450 PASV: data transfer in progress` and stuck transfers. A two-lock chain (`sess["lock"]` outside, backend lock inside) is safe — no path takes them in reverse order.
 
 ## Critical: FTP keepalive via NOOP
 FTP servers drop idle connections (~600s). Client sends `ping` via WebSocket every 30s. Server responds `pong` immediately, then fires a background task (`asyncio.ensure_future`) that acquires the lock and calls `FTPBackend.noop()` → `voidcmd("NOOP")` via `to_thread`. Errors silently ignored. This keeps the control channel alive as long as the browser tab is open.
@@ -31,16 +31,23 @@ FTP servers drop idle connections (~600s). Client sends `ping` via WebSocket eve
 - All user paths pass through `norm_path()` (strips `..`, `.`, `\\`).
 - `rename(source, dest)` uses full paths. `move(source, dest)` appends source filename to dest dir.
 - `file_exists` carries `context: "upload"|"move"|"copy"` + `source` + `dest`.
-- `download_request` / `download_zip_request` → `{"type":"download_ready","token":"..."}`. Single-use token, consumed via `/api/download?token=`.
+- `download_request` / `download_zip_request` → `{"type":"download_ready","token":"..."}`. Single-use token, TTL 10 min (OrderedDict sweep on insert + purge on WS close), consumed via `/api/download?token=`.
 - `list_items` → `list_items_ok {path, items}` (dirs + files, used by sidebar tree, not `list`).
 - `properties` → `props_ok {props}`; `props.path` = full path (server adds it; client shows under "Path:" label, click copies, Ctrl+click copies basename).
-- Error codes: `not_authenticated`, `no_active_upload`, `item_not_found`.
+- `checksum` → `checksum_ok {path, algo, hash}` (bg_task). Runs in a fresh bg_task; MD5 computed **locally** by streaming — never trust server-native MD5/XMD5 commands (ProFTPD etc. return differing hashes).
+- Error codes: `not_authenticated`, `no_active_upload`, `item_not_found`, `checksum_failed` (carries `path`).
 
 ## Backend architecture
-- `FileBackend` (ABC) in `server/backends/base.py`. Abstract: `connect`, `disconnect`, `getcwd`, `list_dir`, `mkdir`, `delete`, `delete_dir`, `rename`, `read_bytes`, `write_bytes`, `exists`. Default impl: `rmdir`, `copy` (recursive, 2MB-throttled progress), `cancel`, `collect_paths`, `noop` (pass).
+- `FileBackend` (ABC) in `server/backends/base.py`. Abstract: `connect`, `disconnect`, `getcwd`, `list_dir`, `mkdir`, `delete`, `delete_dir`, `rename`, `read_bytes`, `write_bytes`, `exists`. Default impl: `rmdir`, `copy` (recursive, 2MB-throttled progress), `cancel`, `collect_paths`, `noop` (pass), `is_connected` (True), `stream_bytes` (chunks `read_bytes`), `checksum` (streaming `hashlib`).
 - `BackendFactory` in `server/backends/__init__.py`: plugin registry via `register("name", Class)`. Currently only `"ftp"` → `FTPBackend`.
-- `FTPBackend` wraps `ftplib.FTP` via `asyncio.to_thread`. `TYPE I` on connect. Dir rename fallback: copy+delete. `noop()` sends `voidcmd("NOOP")`.
+- `FTPBackend` wraps `ftplib.FTP` via `asyncio.to_thread`. Every command runs under the internal `self._lock`. **Send `TYPE I` before EVERY transfer** (`stream_bytes`/`read_bytes`/`write_bytes`), not just at connect — some servers (ProFTPD `DefaultTransferMode ascii`) revert to ASCII after other data transfers, silently corrupting binary files (wrong MD5). Dir rename fallback: copy+delete. `noop()` sends `voidcmd("NOOP")`. teardown closes `ftp.sock` + `ftp.file` (ftplib has no `sockobj`).
+- `stream_bytes(path)` overrides base with constant-memory transfer: `transfercmd("RETR …")` → chunked `conn.recv` → verify `voidresp()` (non-2xx raises `BackendError`, catches silent truncation). `error_temp` (450/425) or `OSError` → `_abort()` closes the connection; `is_connected()` returns False → main sets `sess["backend"] = None` → next request auto-reconnects from `auth_params`.
 - One FTP connection per session. `/api/download` creates a fresh backend from saved `auth_params`.
+
+## Download streaming (OOM-safe)
+- Single file: `StreamingResponse` over `be.stream_bytes()`, `Content-Length` from `be.size()` (SIZE). Constant RAM — never buffer whole file (old `read_bytes` → `BytesIO` OOM'd on big files).
+- Zip: collect paths, write into `tempfile.SpooledTemporaryFile(max_size=16MB)` (spills to disk), then stream the temp file back; `Content-Length` = built zip size.
+- `disconnect()` runs inside the generator's `finally` (NOT before `return StreamingResponse(...)`) — the FTP control channel must stay alive while chunks stream.
 
 ## Config (`config/config.yaml`)
 Hand-parsed via `partition(":")` — no PyYAML. Bool/int auto-detected. Empty/missing file → login fields editable.
@@ -55,6 +62,7 @@ Keys: `backend` (default `"ftp"`), `host`, `port`, `passive`, `title`, `use_head
 ## Session management
 - `sessions: dict[str, dict]` (in-memory UUID keys). Fields: `backend`, `lock`, `gen`, `cancelled`, `upload_buf`, `upload_path`, `auth_params`, `sid`, `write_task`, `bg_task`.
 - `auth_params` saved after auth for auto-reconnect and `/api/download`.
+- `download_tokens: OrderedDict[token → {path|paths, sid, ts}]`; TTL 600s, swept on insert, purged for a sid on WS close.
 
 ## Client (`static/app.js`)
 - `lang.js` loaded first — provides `__()`, `_loadI18n()`, `errorCodeMap`.
@@ -68,6 +76,7 @@ Keys: `backend` (default `"ftp"`), `host`, `port`, `passive`, `title`, `use_head
 - **Sidebar tree** (`#folder-sidebar`): lazy-load via `list_items`, `folderTree = Map<path, {loaded,loading,expanded,items}>`. Root = `basePath` (cwd from `auth_ok`), NOT `/`. Click folder = navigate + expand; chevron = toggle. Files render as leaf rows. Context menu on sidebar items uses `ctxBasePath` (parent dir); select/select_all hidden. Width persisted via `sidebarWidth` cookie, drag handle `#sidebar-resizer` (desktop only). Home (breadcrumb) icon → `navigate('/')` + `collapseFolderTree()`. Top-level placeholder `#empty-root` ("Choose folder") shows when `currentPath === basePath`; `navigateUp` boundary is `basePath`.
 - **Splash screen**: `#splash` (logo + spinner) shown on load until `ws.onopen`; prevents login-form flash. `auth-overlay` starts `hidden`.
 - **Cache-busting**: `app.js?v=9`, `lang.js?v=9` hardcoded in `index.html`.
+- **Checksum in properties modal**: MD5 row always shown for files (`renderChecksumRow`); uncomputed → `fa-sync-alt` button, pending → spinner, done → hash + copy icon. Results cached in `checksumCache = Map<path, {algo,hash}|{pending}>` (survives modal close, session-lived). Clicks delegated on `#props-body` (`closest('#props-checksum-btn' / '#props-checksum' / '#props-checksum-icon')`) — the row is replaced via `outerHTML` on `checksum_ok`, so per-element listeners would be lost.
 - `esc()` function for HTML-escaping user-controlled data in `innerHTML`.
 
 ## Tailwind / i18n / Docker
