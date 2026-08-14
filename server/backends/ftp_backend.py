@@ -224,6 +224,34 @@ class FTPBackend(FileBackend):
         buf.seek(0)
         return buf
 
+    async def size(self, path: str) -> int:
+        try:
+            return await asyncio.to_thread(self._ftp.size, path)
+        except Exception:
+            raise BackendError(f"size failed: {path}")
+
+    async def stream_bytes(self, path: str, chunk_size: int = 65536):
+        conn = None
+        try:
+            conn = await asyncio.to_thread(self._ftp.transfercmd, f"RETR {path}")
+            while True:
+                chunk = await asyncio.to_thread(conn.recv, chunk_size)
+                if not chunk:
+                    break
+                yield chunk
+        except error_perm as e:
+            raise BackendError(str(e)) from e
+        finally:
+            if conn is not None:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+                try:
+                    await asyncio.to_thread(self._ftp.voidresp)
+                except Exception:
+                    pass
+
     async def write_bytes(self, path: str, buf: BytesIO, progress_cb: Optional[ProgressCB] = None, total_size: int = 0) -> None:
         buf.seek(0)
         try:

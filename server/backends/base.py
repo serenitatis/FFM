@@ -156,6 +156,16 @@ class FileBackend(ABC):
     async def read_bytes(self, path: str, progress_cb: Optional[ProgressCB] = None, total_size: int = 0) -> BytesIO:
         pass
 
+    async def stream_bytes(self, path: str, chunk_size: int = 65536):
+        """Stream file contents as chunks. Default: chunk read_bytes. Override for constant-memory streaming."""
+        buf = await self.read_bytes(path)
+        buf.seek(0)
+        while True:
+            chunk = buf.read(chunk_size)
+            if not chunk:
+                break
+            yield chunk
+
     @abstractmethod
     async def write_bytes(self, path: str, buf: BytesIO, progress_cb: Optional[ProgressCB] = None, total_size: int = 0) -> None:
         pass

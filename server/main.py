@@ -5,6 +5,9 @@ import os
 import base64
 import secrets
 import zipfile
+import tempfile
+import time
+from collections import OrderedDict
 from io import BytesIO
 from datetime import datetime
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -22,7 +25,8 @@ app.mount("/assets", StaticFiles(directory=os.path.join(os.path.dirname(os.path.
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sessions: dict[str, dict] = {}
-download_tokens: dict[str, dict] = {}
+download_tokens: OrderedDict = OrderedDict()
+DOWNLOAD_TOKEN_TTL = 600
 
 
 def load_config():
@@ -346,7 +350,8 @@ async def handle_msg(ws: WebSocket, data: dict, sess: dict):
             elif action == "download_request":
                 p = norm_path(params["path"])
                 token = uuid.uuid4().hex
-                download_tokens[token] = {"path": p, "sid": sess["sid"]}
+                _sweep_tokens()
+                download_tokens[token] = {"path": p, "sid": sess["sid"], "ts": time.time()}
                 await ws.send_json({"type": "download_ready", "token": token})
 
             elif action == "download_zip_request":
@@ -355,7 +360,8 @@ async def handle_msg(ws: WebSocket, data: dict, sess: dict):
                     await ws.send_json({"type": "error", "msg": "No paths provided"})
                     return
                 token = uuid.uuid4().hex
-                download_tokens[token] = {"paths": paths, "sid": sess["sid"], "zip": True}
+                _sweep_tokens()
+                download_tokens[token] = {"paths": paths, "sid": sess["sid"], "zip": True, "ts": time.time()}
                 await ws.send_json({"type": "download_ready", "token": token, "zip": True})
 
             elif action == "properties":
@@ -398,6 +404,8 @@ async def ws_endpoint(ws: WebSocket):
         pass
     finally:
         sessions.pop(sid, None)
+        for stale in [k for k, v in download_tokens.items() if v.get("sid") == sid]:
+            download_tokens.pop(stale, None)
         for key in ("write_task", "bg_task"):
             t = sess.get(key)
             if t and not t.done():
@@ -494,10 +502,29 @@ async def api_i18n():
     return sorted(codes)
 
 
+def _sweep_tokens():
+    now = time.time()
+    while download_tokens:
+        info = next(iter(download_tokens.values()))
+        if now - info["ts"] <= DOWNLOAD_TOKEN_TTL:
+            break
+        download_tokens.popitem(last=False)
+
+
+def _iter_file(f, chunk_size: int = 65536):
+    while True:
+        data = f.read(chunk_size)
+        if not data:
+            break
+        yield data
+
+
 @app.get("/api/download")
 async def api_download(token: str):
     info = download_tokens.pop(token, None)
     if info is None:
+        return {"error": "Invalid or expired token"}
+    if time.time() - info["ts"] > DOWNLOAD_TOKEN_TTL:
         return {"error": "Invalid or expired token"}
     sess = sessions.get(info["sid"])
     if sess is None:
@@ -515,35 +542,63 @@ async def api_download(token: str):
     try:
         if info.get("zip"):
             paths = info["paths"]
-            buf = BytesIO()
             now = datetime.now().strftime("%d%m%Y%H%M%S")
             zip_name = f"download-{now}.zip"
 
             collected = await be.collect_paths(paths)
-            with zipfile.ZipFile(buf, "w", zipfile.ZIP_STORED) as zf:
-                for fp, arc_name in collected:
-                    data = await be.read_bytes(fp)
-                    zf.writestr(arc_name, data.read())
-            buf.seek(0)
+            tmp = tempfile.SpooledTemporaryFile(max_size=16 * 1024 * 1024)
+            try:
+                with zipfile.ZipFile(tmp, "w", zipfile.ZIP_STORED) as zf:
+                    for fp, arc_name in collected:
+                        dst = zf.open(arc_name, "w")
+                        async for chunk in be.stream_bytes(fp):
+                            dst.write(chunk)
+                        dst.close()
+            except BackendError:
+                tmp.close()
+                raise
+            tmp.seek(0, 2)
+            size = tmp.tell()
+            tmp.seek(0)
 
-            return StreamingResponse(buf, media_type="application/zip", headers={
-                "Content-Disposition": f'attachment; filename="{zip_name}"'
+            async def _zip_stream():
+                try:
+                    for chunk in _iter_file(tmp):
+                        yield chunk
+                finally:
+                    tmp.close()
+                    await be.disconnect()
+
+            return StreamingResponse(_zip_stream(), media_type="application/zip", headers={
+                "Content-Disposition": f'attachment; filename="{zip_name}"',
+                "Content-Length": str(size),
             })
 
         else:
             path = info["path"]
             name = path.rsplit("/", 1)[-1] or "download"
-            buf = await be.read_bytes(path)
-            return StreamingResponse(buf, media_type="application/octet-stream", headers={
-                "Content-Disposition": f'attachment; filename="{name}"'
-            })
+            headers = {"Content-Disposition": f'attachment; filename="{name}"'}
+            try:
+                size = await be.size(path)
+                if size is not None:
+                    headers["Content-Length"] = str(size)
+            except BackendError:
+                pass
+
+            async def _file_stream():
+                try:
+                    async for chunk in be.stream_bytes(path):
+                        yield chunk
+                finally:
+                    await be.disconnect()
+
+            return StreamingResponse(_file_stream(), media_type="application/octet-stream", headers=headers)
 
     except BackendError as e:
-        return {"error": str(e)}
-    finally:
         try:
             await be.disconnect()
         except Exception:
             pass
+        return {"error": str(e)}
 
 
