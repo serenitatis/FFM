@@ -1,6 +1,13 @@
 .hidden{display:none!important}
 .config-hidden{display:none!important}
 
+/* --- dynamic viewport height (mobile browser UI) --- */
+/* 100vh on phones/tablets = height with hidden browser bar, bigger than visible area.
+   With body overflow:hidden Chrome never hides its toolbar, so the app bottom (and the
+   last rows of the file list) stay permanently below the fold. 100dvh = visible height. */
+body,#main{height:100vh!important;height:100dvh!important}
+#table-wrap{overscroll-behavior:contain}
+
 /* --- auth gradient animation --- */
 .auth-gradient{background:linear-gradient(135deg,#2563EB,#C0CEED,#2563EB,#C0CEED);background-size:400% 400%;animation:gradientShift 15s ease infinite}
 .dark .auth-gradient{background:linear-gradient(135deg,#0E1727,#2C486A,#0E1727,#2C486A);background-size:400% 400%}
