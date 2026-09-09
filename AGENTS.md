@@ -51,7 +51,8 @@ FTP servers drop idle connections (~600s). Client sends `ping` via WebSocket eve
 
 ## Config (`config/config.yaml`)
 Hand-parsed via `partition(":")` — no PyYAML. Bool/int auto-detected. Empty/missing file → login fields editable.
-Keys: `backend` (default `"ftp"`), `host`, `port`, `passive`, `title`, `use_headers` (false by default; enables `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy` on static responses), `sessionLifetime` (minutes, optional; default 180 = 3 hours; drives cookie lifetime), `cookieKey` (hex 64 chars, optional; AES key for auth token, else env `FFM_COOKIE_KEY`; if neither set — no persistent session, login form on every reload).
+Keys: `backend` (default `"ftp"`), `host`, `port`, `passive`, `title`, `use_headers` (false by default; enables `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy` on static responses), `sessionLifetime` (minutes, optional; default 180 = 3 hours; drives cookie lifetime), `cookieKey` (hex 64 chars, optional; AES key for auth token, else env `FFM_COOKIE_KEY`; if neither set — no persistent session, login form on every reload), `auth_logging` (`all`/`fails`/`none`; default `fails`), `reverse_proxy` (bool; default false).
+Auth log: `_log_auth()` appends to `config/auth.log` (auto-created; gitignored via `*.log`). Line format `DD.MM.YYYY HH:MM:SS - Client: IP - Login: user - Status: failed|success`. Level `fails` logs failed only; `all` logs every attempt; `none` off. **Only explicit credential logins logged** (form + legacy-cookie migrate, `explicit = token is None`) — token auto-re-auth on page reload skipped. `reverse_proxy: true` → real client IP = leftmost `X-Forwarded-For` entry via `ws.headers`; else `ws.client.host`. IP + login captured BEFORE `params = auth_params` (token branch overwrites params).
 
 ## Security notes
 - Path traversal in `/i18n/{name}` prevents `..`, `/`, `\`, `:` in filename + `realpath` boundary check.

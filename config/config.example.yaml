@@ -22,3 +22,9 @@
 # AES key for the auth token cookie (hex, 64 chars). Falls back to env FFM_COOKIE_KEY.
 # If neither is set — no persistent session, login form on every reload.
 # cookieKey: ""
+
+# Auth logging into config/auth.log. all = every login attempt, fails = failed only, none = off.
+# auth_logging: fails
+
+# Trust X-Forwarded-For header (leftmost IP) from a reverse proxy as real client IP in the auth log.
+# reverse_proxy: false

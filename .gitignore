@@ -22,3 +22,6 @@ Thumbs.db
 
 # Local config (see config.example.yaml)
 config/config.yaml
+
+# Logs
+*.log

@@ -88,6 +88,29 @@ Then put the output into `config/config.yaml`:
 cookieKey: 2f7b9c...  # 64 hex chars, replace with the generated value
 ```
 
+### Login logging
+
+Login attempts are appended to `config/auth.log`. One line per attempt:
+
+```
+DD.MM.YYYY HH:MM:SS - Client: 1.2.3.4 - Login: user - Status: failed
+```
+
+Controlled by `auth_logging` in `config/config.yaml`:
+
+- `all` — log every login attempt (successful and failed)
+- `fails` — log only failed attempts (default)
+- `none` — logging disabled
+
+Only explicit credential logins (the login form) are logged — automatic token re-auth on page reload is not.
+
+If the app runs behind a reverse proxy, set `reverse_proxy: true` so the real client IP is taken
+from the `X-Forwarded-For` header (leftmost IP) instead of the proxy's address:
+
+```yaml
+reverse_proxy: true
+```
+
 ### Example File
 
 ```yaml
@@ -98,6 +121,8 @@ passive: true       # Enable passive FTP mode
 title: "File Manager" # Custom application title
 sessionLifetime: 180 # Cookie lifetime in minutes (default 180 = 3 hours)
 cookieKey: "" # Optional: hex 64 chars AES key for the auth cookie; else env FFM_COOKIE_KEY; if neither set — no persistent session
+auth_logging: fails # Optional: log login attempts into config/auth.log. all = every attempt, fails = failed only (default), none = off
+reverse_proxy: false # Optional: take real client IP from X-Forwarded-For header (leftmost) for the auth log
 ```
 ## License
 

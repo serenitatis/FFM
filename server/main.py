@@ -7,6 +7,7 @@ import secrets
 import zipfile
 import tempfile
 import time
+import threading
 from collections import OrderedDict
 from io import BytesIO
 from datetime import datetime
@@ -56,6 +57,34 @@ def load_config():
 
 
 _USE_HEADERS = load_config().get("use_headers", False)
+
+_AUTH_LOGGING = load_config().get("auth_logging", "fails")
+_REVERSE_PROXY = load_config().get("reverse_proxy", False)
+_LOG_LOCK = threading.Lock()
+AUTH_LOG_PATH = os.path.join(ROOT, "config", "auth.log")
+
+
+def _client_ip(ws) -> str:
+    if _REVERSE_PROXY:
+        xff = ws.headers.get("x-forwarded-for")
+        if xff:
+            first = xff.split(",")[0].strip()
+            if first:
+                return first
+    client = ws.client
+    return client.host if client else "unknown"
+
+
+def _log_auth(ip: str, login: str, status: str) -> None:
+    if _AUTH_LOGGING == "none":
+        return
+    if _AUTH_LOGGING == "fails" and status != "failed":
+        return
+    ts = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
+    line = f"{ts} - Client: {ip} - Login: {login} - Status: {status}\n"
+    with _LOG_LOCK:
+        with open(AUTH_LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(line)
 
 
 def norm_path(path: str) -> str:
@@ -158,6 +187,9 @@ async def handle_msg(ws: WebSocket, data: dict, sess: dict):
     async with lock:
         if action == "auth":
             token = params.get("token") if isinstance(params, dict) else None
+            explicit = not token
+            login = params.get("user", "") if explicit else ""
+            ip = _client_ip(ws)
             cfg = load_config()
             backend_type = cfg.get("backend", "ftp")
             if token:
@@ -180,8 +212,12 @@ async def handle_msg(ws: WebSocket, data: dict, sess: dict):
                 if token:
                     msg["token"] = token
                 await ws.send_json(msg)
+                if explicit:
+                    _log_auth(ip, login, "success")
             except (BackendError, Exception) as e:
                 await ws.send_json({"type": "auth_error", "msg": str(e)})
+                if explicit:
+                    _log_auth(ip, login, "failed")
             return
 
         if be is None:
